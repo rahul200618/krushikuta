@@ -22,8 +22,8 @@ function Courses() {
     <>
       <PageHero
         eyebrow="Courses"
-        title={<>Premium <span className="text-gradient-gold">Agriculture Courses</span></>}
-        description="Government exam coaching, ICAR preparation, practical training and farm science entrance — taught by India's top agriculture mentors."
+        title={<>Premium <span className="text-gradient-gold">Coaching Programs</span></>}
+        description="Carefully designed courses that balance theory, practical training and exam strategy."
       />
       <section className="section-padding bg-background">
         <div className="container-px mx-auto max-w-7xl grid md:grid-cols-2 gap-6">

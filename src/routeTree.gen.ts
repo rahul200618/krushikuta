@@ -19,6 +19,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ServicesIndexRouteImport } from './routes/services/index'
+import { Route as BlogIndexRouteImport } from './routes/blog.index'
 import { Route as ServicesVciVeterinaryAdmissionRouteImport } from './routes/services/vci-veterinary-admission'
 import { Route as ServicesSheepGoatProjectReportRouteImport } from './routes/services/sheep-goat-project-report'
 import { Route as ServicesPracticalExamCoachingRouteImport } from './routes/services/practical-exam-coaching'
@@ -33,6 +34,7 @@ import { Route as ServicesCropLoansSupportRouteImport } from './routes/services/
 import { Route as ServicesAoAaoBankExamRouteImport } from './routes/services/ao-aao-bank-exam'
 import { Route as ServicesAgriConsultingReportsRouteImport } from './routes/services/agri-consulting-reports'
 import { Route as ServicesAgriConsultingDprRouteImport } from './routes/services/agri-consulting-dpr'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 
 const ServicesRoute = ServicesRouteImport.update({
   id: '/services',
@@ -83,6 +85,11 @@ const ServicesIndexRoute = ServicesIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ServicesRoute,
+} as any)
+const BlogIndexRoute = BlogIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => BlogRoute,
 } as any)
 const ServicesVciVeterinaryAdmissionRoute =
   ServicesVciVeterinaryAdmissionRouteImport.update({
@@ -166,17 +173,23 @@ const ServicesAgriConsultingDprRoute =
     path: '/agri-consulting-dpr',
     getParentRoute: () => ServicesRoute,
   } as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => BlogRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
-  '/blog': typeof BlogRoute
+  '/blog': typeof BlogRouteWithChildren
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
+  '/blog/$slug': typeof BlogSlugRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -191,17 +204,18 @@ export interface FileRoutesByFullPath {
   '/services/practical-exam-coaching': typeof ServicesPracticalExamCoachingRoute
   '/services/sheep-goat-project-report': typeof ServicesSheepGoatProjectReportRoute
   '/services/vci-veterinary-admission': typeof ServicesVciVeterinaryAdmissionRoute
+  '/blog/': typeof BlogIndexRoute
   '/services/': typeof ServicesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
-  '/blog': typeof BlogRoute
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -216,6 +230,7 @@ export interface FileRoutesByTo {
   '/services/practical-exam-coaching': typeof ServicesPracticalExamCoachingRoute
   '/services/sheep-goat-project-report': typeof ServicesSheepGoatProjectReportRoute
   '/services/vci-veterinary-admission': typeof ServicesVciVeterinaryAdmissionRoute
+  '/blog': typeof BlogIndexRoute
   '/services': typeof ServicesIndexRoute
 }
 export interface FileRoutesById {
@@ -223,12 +238,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/admin': typeof AdminRoute
-  '/blog': typeof BlogRoute
+  '/blog': typeof BlogRouteWithChildren
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
+  '/blog/$slug': typeof BlogSlugRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -243,6 +259,7 @@ export interface FileRoutesById {
   '/services/practical-exam-coaching': typeof ServicesPracticalExamCoachingRoute
   '/services/sheep-goat-project-report': typeof ServicesSheepGoatProjectReportRoute
   '/services/vci-veterinary-admission': typeof ServicesVciVeterinaryAdmissionRoute
+  '/blog/': typeof BlogIndexRoute
   '/services/': typeof ServicesIndexRoute
 }
 export interface FileRouteTypes {
@@ -257,6 +274,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/results'
     | '/services'
+    | '/blog/$slug'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -271,17 +289,18 @@ export interface FileRouteTypes {
     | '/services/practical-exam-coaching'
     | '/services/sheep-goat-project-report'
     | '/services/vci-veterinary-admission'
+    | '/blog/'
     | '/services/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/admin'
-    | '/blog'
     | '/contact'
     | '/courses'
     | '/register'
     | '/results'
+    | '/blog/$slug'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -296,6 +315,7 @@ export interface FileRouteTypes {
     | '/services/practical-exam-coaching'
     | '/services/sheep-goat-project-report'
     | '/services/vci-veterinary-admission'
+    | '/blog'
     | '/services'
   id:
     | '__root__'
@@ -308,6 +328,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/results'
     | '/services'
+    | '/blog/$slug'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -322,6 +343,7 @@ export interface FileRouteTypes {
     | '/services/practical-exam-coaching'
     | '/services/sheep-goat-project-report'
     | '/services/vci-veterinary-admission'
+    | '/blog/'
     | '/services/'
   fileRoutesById: FileRoutesById
 }
@@ -329,7 +351,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AdminRoute: typeof AdminRoute
-  BlogRoute: typeof BlogRoute
+  BlogRoute: typeof BlogRouteWithChildren
   ContactRoute: typeof ContactRoute
   CoursesRoute: typeof CoursesRoute
   RegisterRoute: typeof RegisterRoute
@@ -408,6 +430,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/services/'
       preLoaderRoute: typeof ServicesIndexRouteImport
       parentRoute: typeof ServicesRoute
+    }
+    '/blog/': {
+      id: '/blog/'
+      path: '/'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof BlogIndexRouteImport
+      parentRoute: typeof BlogRoute
     }
     '/services/vci-veterinary-admission': {
       id: '/services/vci-veterinary-admission'
@@ -507,8 +536,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesAgriConsultingDprRouteImport
       parentRoute: typeof ServicesRoute
     }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof BlogRoute
+    }
   }
 }
+
+interface BlogRouteChildren {
+  BlogSlugRoute: typeof BlogSlugRoute
+  BlogIndexRoute: typeof BlogIndexRoute
+}
+
+const BlogRouteChildren: BlogRouteChildren = {
+  BlogSlugRoute: BlogSlugRoute,
+  BlogIndexRoute: BlogIndexRoute,
+}
+
+const BlogRouteWithChildren = BlogRoute._addFileChildren(BlogRouteChildren)
 
 interface ServicesRouteChildren {
   ServicesAgriConsultingDprRoute: typeof ServicesAgriConsultingDprRoute
@@ -555,7 +603,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRoute,
-  BlogRoute: BlogRoute,
+  BlogRoute: BlogRouteWithChildren,
   ContactRoute: ContactRoute,
   CoursesRoute: CoursesRoute,
   RegisterRoute: RegisterRoute,

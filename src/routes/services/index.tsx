@@ -55,7 +55,7 @@ function ServicesIndex() {
                     to={s.href as any} 
                     className="inline-flex items-center gap-2 text-sm font-bold text-primary group-hover:gap-3 transition-all"
                   >
-                    View Details <ArrowRight className="w-4 h-4" />
+                    View {s.title} Details <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
               </Card>

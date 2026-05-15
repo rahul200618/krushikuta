@@ -13,6 +13,7 @@ import { Navbar } from "@/components/site/Navbar";
 import { Footer } from "@/components/site/Footer";
 import { WhatsAppButton } from "@/components/site/WhatsAppButton";
 import { Toaster } from "sonner";
+import { ServicesPopup } from "@/components/site/ServicesPopup";
 import faviconUrl from "../assets/favicon-v2.png?url";
 
 function NotFoundComponent() {
@@ -145,6 +146,7 @@ function RootComponent() {
       </main>
       <Footer />
       <WhatsAppButton />
+      <ServicesPopup />
     </QueryClientProvider>
   );
 }

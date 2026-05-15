@@ -10,25 +10,27 @@ export function ServicesPopup() {
   const [closed, setClosed] = useState(false);
 
   useEffect(() => {
-    const fetchActivePopup = async () => {
-      const { data, error } = await supabase
+    const fetchActivePopup = async (forceOpen = false) => {
+      const { data } = await supabase
         .from('site_settings')
         .select('id, value')
         .like('id', 'popup_%');
 
       if (data) {
-        // Robust check for boolean value (handles true, "true", or 1)
         const active = data.find(d => d.value === true || d.value === "true" || d.value === 1);
         if (active) {
           const idx = parseInt(active.id.split('_')[1]);
           if (!isNaN(idx) && idx >= 0 && idx < services.length) {
-            // Check if this specific popup has been closed in this session
+            
+            if (forceOpen) {
+              sessionStorage.removeItem(`closedServicePopup_${idx}`);
+            }
+
             if (sessionStorage.getItem(`closedServicePopup_${idx}`)) {
               setClosed(true);
               return;
             }
-            // Minimal delay
-            // Reset closed state and set index
+            
             setActiveServiceIdx(idx);
             setClosed(false);
           }
@@ -40,17 +42,16 @@ export function ServicesPopup() {
     
     fetchActivePopup();
 
-    const handleAdminToggle = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const idx = customEvent.detail.idx;
-      if (idx !== null) {
-        sessionStorage.removeItem(`closedServicePopup_${idx}`);
-      }
-      setActiveServiceIdx(idx);
-      setClosed(false); // Reopen instantly for preview
+    // Realtime subscription for site settings (popups)
+    const channel = supabase.channel('public:site_settings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_settings' }, () => {
+        fetchActivePopup(true); // Force re-open when admin changes it
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-    window.addEventListener("servicesPopupSelected", handleAdminToggle);
-    return () => window.removeEventListener("servicesPopupSelected", handleAdminToggle);
   }, []);
 
   if (activeServiceIdx === null) return null;

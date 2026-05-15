@@ -7,7 +7,6 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SectionHeader } from "@/components/site/Section";
-import { ServicesPopup } from "@/components/site/ServicesPopup";
 import { services } from "@/lib/site-data";
 import heroImg from "@/assets/hero-agriculture.jpg";
 
@@ -58,10 +57,10 @@ function Index() {
                 className="gradient-primary text-primary-foreground hover:opacity-90 h-14 px-8 text-lg font-bold shadow-soft transition-all hover:scale-105"
                 onClick={scrollToServices}
               >
-                Explore Services
+                Explore Agriculture Services
               </Button>
               <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm">
-                <Link to="/about">Learn More</Link>
+                <Link to="/about">Learn More About Krishikuta</Link>
               </Button>
             </div>
           </div>
@@ -73,7 +72,6 @@ function Index() {
       <Services />
       <AgriConsulting />
       <Contact />
-      <ServicesPopup />
     </div>
   );
 }
@@ -163,7 +161,7 @@ function AgriConsulting() {
                     Explore Consulting Services <ArrowRight className="w-4 h-4" />
                   </Link>
                   <Button asChild size="sm" className="gradient-primary text-primary-foreground shadow-soft">
-                    <Link to="/register">Register Now</Link>
+                    <Link to="/register">Register for Training</Link>
                   </Button>
                 </div>
               </Card>
@@ -308,7 +306,7 @@ function Contact() {
                   <Input name="interest" placeholder="Interest (e.g., Polyhouse, Loan)" className="sm:col-span-2" />
                   <Textarea name="message" placeholder="Tell us about your goals..." rows={5} className="sm:col-span-2" />
                   <Button disabled={isSubmitting} type="submit" size="lg" className="sm:col-span-2 gradient-primary text-primary-foreground hover:opacity-90">
-                    {isSubmitting ? "Sending..." : "Send Inquiry"} <Send className="ml-2 w-4 h-4" />
+                    {isSubmitting ? "Sending..." : "Send Business Inquiry"} <Send className="ml-2 w-4 h-4" />
                   </Button>
                 </form>
               </>

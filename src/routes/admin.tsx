@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import { services } from "@/lib/site-data";
-import { CheckCircle2, Circle, Trash2, Plus, FileText, Trophy, Settings, Search, Filter, X, Edit3, Image as ImageIcon, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, Trash2, Plus, FileText, Trophy, Settings, Search, Filter, X, Edit3, Image as ImageIcon, Loader2, MessageSquare } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -33,6 +34,7 @@ function AdminPage() {
   const [inquiries, setInquiries] = useState<any[]>([]);
   const [blogs, setBlogs] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
+  const [testimonials, setTestimonials] = useState<any[]>([]);
 
   // Search and Filter States
   const [regSearch, setRegSearch] = useState("");
@@ -40,12 +42,22 @@ function AdminPage() {
   const [inqSearch, setInqSearch] = useState("");
   const [blogSearch, setBlogSearch] = useState("");
   const [resSearch, setResSearch] = useState("");
+  const [testSearch, setTestSearch] = useState("");
 
   const [blogDialogOpen, setBlogDialogOpen] = useState(false);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
   
   const [editingBlog, setEditingBlog] = useState<any>(null);
   const [editingResult, setEditingResult] = useState<any>(null);
+  const [editingTestimonial, setEditingTestimonial] = useState<any>(null);
+
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", description: "", onConfirm: () => {} });
 
   useEffect(() => {
     // Check active session
@@ -96,6 +108,9 @@ function AdminPage() {
 
         const { data: resData } = await supabase.from('results').select('*').order('created_at', { ascending: false });
         if (resData) setResults(resData);
+        
+        const { data: testData } = await supabase.from('testimonials').select('*').order('created_at', { ascending: false });
+        if (testData) setTestimonials(testData);
       };
       fetchData();
     }
@@ -195,24 +210,44 @@ function AdminPage() {
 
   const selectPopup = async (idx: number) => {
     setIsSaving(true);
-    setActivePopupIdx(idx); 
     const updates = Array.from({ length: services.length }).map((_, i) => ({
       id: `popup_${i}`,
       value: idx === -1 ? false : (i === idx ? true : false)
     }));
-    await supabase.from('site_settings').upsert(updates, { onConflict: 'id' });
+    
+    const { error } = await supabase.from('site_settings').upsert(updates, { onConflict: 'id' });
+    
     setIsSaving(false);
+    
+    if (error) {
+      alert(`Error updating settings: ${error.message} (Code: ${error.code}). Check RLS policies.`);
+      return;
+    }
+    
+    setActivePopupIdx(idx); 
     window.dispatchEvent(new CustomEvent("servicesPopupSelected", { detail: { idx: idx === -1 ? null : idx } }));
   };
 
   const deleteRecord = async (table: string, id: string) => {
-    if (confirm("Delete this record?")) {
-      await supabase.from(table).delete().eq('id', id);
-      if (table === 'registrations') setRegistrations(registrations.filter(r => r.id !== id));
-      if (table === 'inquiries') setInquiries(inquiries.filter(i => i.id !== id));
-      if (table === 'blogs') setBlogs(blogs.filter(b => b.id !== id));
-      if (table === 'results') setResults(results.filter(r => r.id !== id));
-    }
+    setConfirmDialog({
+      open: true,
+      title: "Delete Record",
+      description: "Are you sure you want to delete this record? This action cannot be undone.",
+      onConfirm: async () => {
+        const { error } = await supabase.from(table).delete().eq('id', id);
+        
+        if (error) {
+          alert(`Error deleting record: ${error.message} (Code: ${error.code}). Check your Supabase RLS policies for the '${table}' table to ensure DELETE operations are allowed.`);
+          return;
+        }
+
+        if (table === 'registrations') setRegistrations(registrations.filter(r => r.id !== id));
+        if (table === 'inquiries') setInquiries(inquiries.filter(i => i.id !== id));
+        if (table === 'blogs') setBlogs(blogs.filter(b => b.id !== id));
+        if (table === 'results') setResults(results.filter(r => r.id !== id));
+        if (table === 'testimonials') setTestimonials(testimonials.filter(t => t.id !== id));
+      }
+    });
   };
 
   const handleUpsertBlog = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -220,34 +255,41 @@ function AdminPage() {
     const formData = new FormData(e.currentTarget);
     const id = editingBlog?.id;
     
-    const data: any = {
-      title: formData.get('title'),
-      slug: formData.get('slug') || (formData.get('title') as string).toLowerCase().replace(/ /g, '-'),
-      excerpt: formData.get('excerpt'),
-      content: formData.get('content'),
-      read_time: formData.get('read_time') || '5 min read',
-      image_url: formData.get('image_url') || editingBlog?.image_url || ''
-    };
+    setConfirmDialog({
+      open: true,
+      title: id ? "Confirm Update" : "Confirm Addition",
+      description: id ? "Are you sure you want to update this blog post?" : "Are you sure you want to publish this new blog post?",
+      onConfirm: async () => {
+        const data: any = {
+          title: formData.get('title'),
+          slug: formData.get('slug') || (formData.get('title') as string).toLowerCase().replace(/ /g, '-'),
+          excerpt: formData.get('excerpt'),
+          content: formData.get('content'),
+          read_time: formData.get('read_time') || '5 min read',
+          image_url: formData.get('image_url') || editingBlog?.image_url || ''
+        };
 
-    if (!id) {
-       data.date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
+        if (!id) {
+           data.date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
 
-    const { data: savedBlog, error } = id 
-      ? await supabase.from('blogs').update(data).eq('id', id).select()
-      : await supabase.from('blogs').insert([data]).select();
+        const { data: savedBlog, error } = id 
+          ? await supabase.from('blogs').update(data).eq('id', id).select()
+          : await supabase.from('blogs').insert([data]).select();
 
-    if (error) {
-      alert("Error saving blog: " + error.message);
-    } else if (savedBlog) {
-      if (id) {
-        setBlogs(blogs.map(b => b.id === id ? savedBlog[0] : b));
-      } else {
-        setBlogs([savedBlog[0], ...blogs]);
+        if (error) {
+          alert("Error saving blog: " + error.message);
+        } else if (savedBlog) {
+          if (id) {
+            setBlogs(blogs.map(b => b.id === id ? savedBlog[0] : b));
+          } else {
+            setBlogs([savedBlog[0], ...blogs]);
+          }
+          setBlogDialogOpen(false);
+          setEditingBlog(null);
+        }
       }
-      setBlogDialogOpen(false);
-      setEditingBlog(null);
-    }
+    });
   };
 
   const handleUpsertResult = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -255,27 +297,71 @@ function AdminPage() {
     const formData = new FormData(e.currentTarget);
     const id = editingResult?.id;
     
-    const data = {
-      student_name: formData.get('student_name'),
-      exam_name: formData.get('exam_name'),
-      year: formData.get('year') || new Date().getFullYear().toString(),
-    };
+    setConfirmDialog({
+      open: true,
+      title: id ? "Confirm Update" : "Confirm Addition",
+      description: id ? "Are you sure you want to update this result?" : "Are you sure you want to add this result?",
+      onConfirm: async () => {
+        const data = {
+          student_name: formData.get('student_name'),
+          exam_name: formData.get('exam_name'),
+          year: formData.get('year') || new Date().getFullYear().toString(),
+          image_url: formData.get('image_url') || editingResult?.image_url || '',
+        };
 
-    const { data: savedRes, error } = id
-      ? await supabase.from('results').update(data).eq('id', id).select()
-      : await supabase.from('results').insert([data]).select();
+        const { data: savedRes, error } = id
+          ? await supabase.from('results').update(data).eq('id', id).select()
+          : await supabase.from('results').insert([data]).select();
 
-    if (error) {
-      alert("Error saving result: " + error.message);
-    } else if (savedRes) {
-      if (id) {
-        setResults(results.map(r => r.id === id ? savedRes[0] : r));
-      } else {
-        setResults([savedRes[0], ...results]);
+        if (error) {
+          alert("Error saving result: " + error.message);
+        } else if (savedRes) {
+          if (id) {
+            setResults(results.map(r => r.id === id ? savedRes[0] : r));
+          } else {
+            setResults([savedRes[0], ...results]);
+          }
+          setResultDialogOpen(false);
+          setEditingResult(null);
+        }
       }
-      setResultDialogOpen(false);
-      setEditingResult(null);
-    }
+    });
+  };
+
+  const handleUpsertTestimonial = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const id = editingTestimonial?.id;
+    
+    setConfirmDialog({
+      open: true,
+      title: id ? "Confirm Update" : "Confirm Addition",
+      description: id ? "Are you sure you want to update this testimonial?" : "Are you sure you want to add this testimonial?",
+      onConfirm: async () => {
+        const data = {
+          student_name: formData.get('student_name'),
+          program: formData.get('program'),
+          content: formData.get('content'),
+          image_url: formData.get('image_url') || editingTestimonial?.image_url || '',
+        };
+
+        const { data: savedTest, error } = id
+          ? await supabase.from('testimonials').update(data).eq('id', id).select()
+          : await supabase.from('testimonials').insert([data]).select();
+
+        if (error) {
+          alert("Error saving testimonial: " + error.message);
+        } else if (savedTest) {
+          if (id) {
+            setTestimonials(testimonials.map(t => t.id === id ? savedTest[0] : t));
+          } else {
+            setTestimonials([savedTest[0], ...testimonials]);
+          }
+          setTestDialogOpen(false);
+          setEditingTestimonial(null);
+        }
+      }
+    });
   };
 
   // Filter Logic
@@ -298,6 +384,12 @@ function AdminPage() {
   const filteredResults = results.filter(r => 
     r.student_name?.toLowerCase().includes(resSearch.toLowerCase()) || 
     r.exam_name?.toLowerCase().includes(resSearch.toLowerCase())
+  );
+
+  const filteredTestimonials = testimonials.filter(t => 
+    t.student_name?.toLowerCase().includes(testSearch.toLowerCase()) || 
+    t.program?.toLowerCase().includes(testSearch.toLowerCase()) ||
+    t.content?.toLowerCase().includes(testSearch.toLowerCase())
   );
 
   if (!isLoggedIn) {
@@ -343,6 +435,7 @@ function AdminPage() {
             <TabsTrigger value="inquiries" className="rounded-xl py-3 px-6 text-sm font-medium">Inquiries</TabsTrigger>
             <TabsTrigger value="blog" className="rounded-xl py-3 px-6 text-sm font-medium">Blog Posts</TabsTrigger>
             <TabsTrigger value="results" className="rounded-xl py-3 px-6 text-sm font-medium">Results</TabsTrigger>
+            <TabsTrigger value="testimonials" className="rounded-xl py-3 px-6 text-sm font-medium">Testimonials</TabsTrigger>
             <TabsTrigger value="settings" className="rounded-xl py-3 px-6 text-sm font-medium">Popups</TabsTrigger>
           </TabsList>
 
@@ -482,6 +575,7 @@ function AdminPage() {
                       {b.image_url ? (
                         <img 
                           src={b.image_url} 
+                          alt={b.title}
                           className="w-full h-full object-cover" 
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
@@ -525,6 +619,33 @@ function AdminPage() {
                     <div className="grid gap-2"><Label>Student Name</Label><Input name="student_name" defaultValue={editingResult?.student_name} placeholder="John Smith" required /></div>
                     <div className="grid gap-2"><Label>Exam / Achievement</Label><Input name="exam_name" defaultValue={editingResult?.exam_name} placeholder="Agriculture Officer" required /></div>
                     <div className="grid gap-2"><Label>Year</Label><Input name="year" defaultValue={editingResult?.year} placeholder="2024" /></div>
+                    <div className="grid gap-2">
+                       <Label>Student Photo</Label>
+                       <div className="flex gap-2">
+                         <Input name="image_url" id="result_image_url" defaultValue={editingResult?.image_url} placeholder="https://example.com/student.jpg" className="flex-1" />
+                         <div className="relative">
+                            <Button type="button" variant="outline" className="relative overflow-hidden">
+                              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}
+                              Upload
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="absolute inset-0 opacity-0 cursor-pointer" 
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const url = await uploadImage(file);
+                                    if (url) {
+                                      const input = document.getElementById('result_image_url') as HTMLInputElement;
+                                      if (input) input.value = url;
+                                    }
+                                  }
+                                }}
+                              />
+                            </Button>
+                         </div>
+                       </div>
+                    </div>
                     <Button type="submit" className="w-full gradient-gold text-gold-foreground">{editingResult ? "Update Result" : "Upload Result"}</Button>
                   </form>
                 </DialogContent>
@@ -534,7 +655,24 @@ function AdminPage() {
               {filteredResults.length > 0 ? filteredResults.map(r => (
                 <Card key={r.id} className="p-4 border-border flex items-center justify-between hover:shadow-soft transition-all">
                   <div className="flex items-center gap-3">
-                    <Trophy className="w-5 h-5 text-gold" />
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
+                      {r.image_url ? (
+                        <img 
+                          src={r.image_url} 
+                          alt={r.student_name}
+                          className="w-full h-full object-cover" 
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            const icon = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                            if (icon) icon.style.display = 'block';
+                          }}
+                        />
+                      ) : null}
+                      <Trophy 
+                        className="w-5 h-5 text-gold" 
+                        style={{ display: r.image_url ? 'none' : 'block' }} 
+                      />
+                    </div>
                     <div><div className="font-bold text-sm">{r.student_name}</div><div className="text-[10px] text-muted-foreground uppercase">{r.exam_name} • {r.year}</div></div>
                   </div>
                   <div className="flex gap-2">
@@ -543,6 +681,96 @@ function AdminPage() {
                   </div>
                 </Card>
               )) : <div className="col-span-full text-center py-20 text-muted-foreground border border-dashed rounded-2xl">No results found.</div>}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="testimonials">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input value={testSearch} onChange={(e) => setTestSearch(e.target.value)} className="pl-10 rounded-xl bg-card" placeholder="Search testimonials..." />
+              </div>
+              <Dialog open={testDialogOpen} onOpenChange={(open) => { setTestDialogOpen(open); if(!open) setEditingTestimonial(null); }}>
+                <DialogTrigger asChild><Button className="gradient-primary w-full md:w-auto"><Plus className="w-4 h-4 mr-2" /> Add Testimonial</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingTestimonial ? "Edit Testimonial" : "New Testimonial"}</DialogTitle>
+                    <DialogDescription>
+                      Enter the student's review and details.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleUpsertTestimonial} className="space-y-4 pt-4">
+                    <div className="grid gap-2"><Label>Student Name</Label><Input name="student_name" defaultValue={editingTestimonial?.student_name} placeholder="John Doe" required /></div>
+                    <div className="grid gap-2"><Label>Program / Course</Label><Input name="program" defaultValue={editingTestimonial?.program} placeholder="Agriculture Officer Coaching" required /></div>
+                    <div className="grid gap-2"><Label>Testimonial Content</Label><Textarea name="content" defaultValue={editingTestimonial?.content} placeholder="The coaching was excellent..." required className="min-h-[100px]" /></div>
+                    <div className="grid gap-2">
+                       <Label>Student Photo (Optional)</Label>
+                       <div className="flex gap-2">
+                         <Input name="image_url" id="test_image_url" defaultValue={editingTestimonial?.image_url} placeholder="https://example.com/student.jpg" className="flex-1" />
+                         <div className="relative">
+                            <Button type="button" variant="outline" className="relative overflow-hidden">
+                              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}
+                              Upload
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                className="absolute inset-0 opacity-0 cursor-pointer" 
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    const url = await uploadImage(file);
+                                    if (url) {
+                                      const input = document.getElementById('test_image_url') as HTMLInputElement;
+                                      if (input) input.value = url;
+                                    }
+                                  }
+                                }}
+                              />
+                            </Button>
+                         </div>
+                       </div>
+                    </div>
+                    <Button type="submit" className="w-full gradient-primary">{editingTestimonial ? "Update Testimonial" : "Save Testimonial"}</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {filteredTestimonials.length > 0 ? filteredTestimonials.map(t => (
+                <Card key={t.id} className="p-4 border-border flex flex-col justify-between hover:shadow-soft transition-all h-full">
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
+                        {t.image_url ? (
+                          <img 
+                            src={t.image_url} 
+                            alt={t.student_name}
+                            className="w-full h-full object-cover" 
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              const icon = (e.target as HTMLImageElement).nextElementSibling as HTMLElement;
+                              if (icon) icon.style.display = 'block';
+                            }}
+                          />
+                        ) : null}
+                        <MessageSquare 
+                          className="w-5 h-5 text-primary" 
+                          style={{ display: t.image_url ? 'none' : 'block' }} 
+                        />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm">{t.student_name}</div>
+                        <div className="text-[10px] text-muted-foreground uppercase">{t.program}</div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground italic line-clamp-3">"{t.content}"</p>
+                  </div>
+                  <div className="flex gap-2 justify-end mt-4 pt-4 border-t border-border">
+                    <Button variant="ghost" size="icon" onClick={() => { setEditingTestimonial(t); setTestDialogOpen(true); }} className="text-primary"><Edit3 className="w-4 h-4"/></Button>
+                    <Button variant="ghost" size="icon" onClick={()=>deleteRecord('testimonials',t.id)} className="text-destructive"><Trash2 className="w-4 h-4"/></Button>
+                  </div>
+                </Card>
+              )) : <div className="col-span-full text-center py-20 text-muted-foreground border border-dashed rounded-2xl">No testimonials found.</div>}
             </div>
           </TabsContent>
 
@@ -568,6 +796,22 @@ function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+      
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              confirmDialog.onConfirm();
+              setConfirmDialog(prev => ({ ...prev, open: false }));
+            }}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

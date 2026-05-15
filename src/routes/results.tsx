@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { Star, Trophy, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { testimonials } from "@/lib/site-data";
 
 export const Route = createFileRoute("/results")({
   head: () => ({
@@ -18,15 +17,33 @@ export const Route = createFileRoute("/results")({
 
 function Results() {
   const [selections, setSelections] = useState<any[]>([]);
+  const [dbTestimonials, setDbTestimonials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchResults() {
-      const { data } = await supabase.from('results').select('*').order('created_at', { ascending: false });
-      if (data) setSelections(data);
+    async function fetchData() {
+      const { data: resData } = await supabase.from('results').select('*').order('created_at', { ascending: false });
+      if (resData) setSelections(resData);
+      
+      const { data: testData } = await supabase.from('testimonials').select('*').order('created_at', { ascending: false });
+      if (testData) setDbTestimonials(testData);
+      
       setLoading(false);
     }
-    fetchResults();
+    fetchData();
+
+    const channel = supabase.channel('public:results_page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'results' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'testimonials' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return (
@@ -84,18 +101,29 @@ function Results() {
             <h2 className="text-3xl md:text-4xl font-bold text-foreground">Student Testimonials</h2>
           </div>
           <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {testimonials.map((t) => (
-              <Card key={t.name} className="p-6 border-border hover:shadow-elegant transition-all">
-                <div className="flex gap-1 text-gold">
-                  {Array.from({ length: 5 }).map((_, i) => <Star key={i} className="w-4 h-4 fill-current" />)}
+            {dbTestimonials.length > 0 ? dbTestimonials.map((t) => (
+              <Card key={t.id} className="p-6 border-border hover:shadow-elegant transition-all">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden shrink-0">
+                    {t.image_url ? (
+                      <img src={t.image_url} alt={t.student_name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Star className="w-5 h-5 text-gold fill-gold" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-semibold text-foreground">{t.student_name}</div>
+                    <div className="text-xs text-muted-foreground uppercase">{t.program}</div>
+                  </div>
                 </div>
-                <p className="mt-4 text-foreground/85 leading-relaxed">"{t.text}"</p>
-                <div className="mt-5 pt-5 border-t border-border">
-                  <div className="font-semibold text-foreground">{t.name}</div>
-                  <div className="text-sm text-muted-foreground">{t.role}</div>
+                <div className="flex gap-1 text-gold mb-3">
+                  {Array.from({ length: 5 }).map((_, i) => <Star key={i} className="w-3.5 h-3.5 fill-current" />)}
                 </div>
+                <p className="text-foreground/85 leading-relaxed text-sm italic">"{t.content}"</p>
               </Card>
-            ))}
+            )) : (
+              <div className="col-span-full text-center text-muted-foreground py-8">No testimonials available yet.</div>
+            )}
           </div>
         </div>
       </section>
