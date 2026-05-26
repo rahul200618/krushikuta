@@ -16,10 +16,10 @@ export function Footer() {
       <div className="container-px mx-auto max-w-7xl py-16 grid gap-10 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center -ml-2 md:-ml-4">
-            <img 
-              src={logoImage} 
-              alt="Krishikuta Logo" 
-              className="h-16 md:h-20 w-auto object-contain brightness-0 invert" 
+            <img
+              src={logoImage}
+              alt="Krishikuta Logo"
+              className="h-16 md:h-20 w-auto object-contain brightness-0 invert"
             />
           </div>
           <p className="mt-4 text-sm text-background/70 leading-relaxed">
@@ -74,12 +74,12 @@ export function Footer() {
           <ul className="space-y-3 text-sm text-background/70">
             <li className="flex gap-2">
               <a href="https://maps.app.goo.gl/JGrboTZTp3zQLTfF7" target="_blank" rel="noopener noreferrer" className="flex gap-2 hover:text-white transition-colors">
-                <MapPin className="w-4 h-4 mt-0.5 text-gold" /> KRISHIKUTA - AGRICULTURE PRACTICAL TEST 2025 KRISHIKUTA AGRI COACHING CLASSES
+                <MapPin className="w-4 h-4 mt-0.5 text-gold" /> KRISHIKUTA Hosakote- AGRICULTURE PRACTICAL TEST 2025 KRISHIKUTA AGRI COACHING CLASSES
               </a>
             </li>
             <li className="flex gap-2">
-              <a 
-                href="tel:+919108652322" 
+              <a
+                href="tel:+919108652322"
                 onClick={handlePhoneClick}
                 className="flex gap-2 hover:text-white transition-colors"
                 title="Click to call / Copy to clipboard"

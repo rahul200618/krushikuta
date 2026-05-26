@@ -262,7 +262,7 @@ function Contact() {
             {[
               { icon: Phone, label: "Call Us", value: "+91 9108652322", href: "tel:+919108652322" },
               { icon: Mail, label: "Email", value: "connect@krishikuta.in", href: "mailto:connect@krishikuta.in" },
-              { icon: MapPin, label: "Visit", value: "KRISHIKUTA - AGRICULTURE PRACTICAL TEST 2025 KRISHIKUTA AGRI COACHING CLASSES", href: "https://maps.app.goo.gl/JGrboTZTp3zQLTfF7" },
+              { icon: MapPin, label: "Visit", value: "KRISHIKUTA - Hosakote", href: "https://maps.app.goo.gl/JGrboTZTp3zQLTfF7" },
             ].map((i) => (
               <a key={i.label} href={i.href ?? "#"} className="p-5 rounded-2xl bg-card border border-border flex gap-4 items-start hover:shadow-soft transition-all">
                 <div className="w-11 h-11 rounded-xl gradient-primary grid place-items-center shrink-0">
