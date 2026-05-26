@@ -74,7 +74,7 @@ export function Footer() {
           <ul className="space-y-3 text-sm text-background/70">
             <li className="flex gap-2">
               <a href="https://maps.app.goo.gl/JGrboTZTp3zQLTfF7" target="_blank" rel="noopener noreferrer" className="flex gap-2 hover:text-white transition-colors">
-                <MapPin className="w-4 h-4 mt-0.5 text-gold" /> KRISHIKUTA Hosakote- AGRICULTURE PRACTICAL TEST 2025 KRISHIKUTA AGRI COACHING CLASSES
+                <MapPin className="w-4 h-4 mt-0.5 text-gold" /> KRISHIKUTA HOSAKOTE- AGRICULTURE PRACTICAL TEST 2025 KRISHIKUTA AGRI COACHING CLASSES
               </a>
             </li>
             <li className="flex gap-2">
