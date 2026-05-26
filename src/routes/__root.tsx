@@ -108,8 +108,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
             addressCountry: "IN",
           },
           sameAs: [
-            "https://instagram.com/krishikuta",
-            "https://youtube.com/@krishikuta"
+            "https://www.instagram.com/krishikuta_official?igsh=MTd2dG9iMms1bW5ueg==",
+            "https://youtube.com/@krishikuta?si=dGApyIrBTUpGlW6q"
           ],
         }),
       },

@@ -28,8 +28,8 @@ export function Footer() {
           </p>
           <div className="flex gap-3 mt-5">
             {[
-              { Icon: Instagram, href: "https://instagram.com/krishikuta" },
-              { Icon: Youtube, href: "https://youtube.com/@krishikuta" },
+              { Icon: Instagram, href: "https://www.instagram.com/krishikuta_official?igsh=MTd2dG9iMms1bW5ueg==" },
+              { Icon: Youtube, href: "https://youtube.com/@krishikuta?si=dGApyIrBTUpGlW6q" },
             ].map((s, i) => (
               <a
                 key={i}
