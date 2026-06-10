@@ -96,49 +96,65 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
     setLoading(true);
 
     try {
-      // 1. Upload images if any
       let imageUrls: Record<string, string> = {};
       if (imageFiles.length > 0) {
         imageUrls = await uploadImagesToStorage(imageFiles);
       }
 
-      // 2. Parse text
-      // Expected format block:
-      // Q1. Question text...?
-      // A) Option A
-      // B) Option B
-      // C) Option C
-      // D) Option D
-      // Ans: A
-      
-      const blocks = rawText.split(/(?=Q\d+\.)/i).filter(b => b.trim());
+      // 2. Parse text robustly
+      const normalizedText = '\n' + rawText.trim();
+      // Split by Question markers: Q1., 1., Q2., 2., etc. at the start of a line
+      const blocks = normalizedText.split(/\n(?=Q?\d+[\.\)])/i).map(b => b.trim()).filter(b => b);
       const parsedQuestions = [];
 
       for (let i = 0; i < blocks.length; i++) {
-        const block = blocks[i];
+        let block = blocks[i];
+        
+        // Extract Ans: or Answer:
+        let ansChar = 'A'; // default
+        const ansMatch = block.match(/(?:Ans|Answer)[\s:-]+([A-D])/i);
+        if (ansMatch) {
+          ansChar = ansMatch[1].toUpperCase();
+          block = block.replace(ansMatch[0], ''); // remove from block text
+        }
+
+        // Normalize options so they are on newlines (e.g. if A) B) C) D) are on the same line)
+        block = block.replace(/\s+([A-D]\))/gi, '\n$1');
+        block = block.replace(/\s+\(([A-D])\)/gi, '\n($1)');
+        block = block.replace(/\s+([A-D]\.)\s/gi, '\n$1 '); // e.g. " A. Option"
+        
         const lines = block.split('\n').map(l => l.trim()).filter(l => l);
         
         let qText = '';
-        const options: string[] = [];
-        let ansChar = '';
+        let options: string[] = [];
+        let qNumStr = String(i + 1);
 
         for (const line of lines) {
-          if (line.match(/^Q\d+\./i)) {
-            qText = line.replace(/^Q\d+\.\s*/i, '');
-          } else if (line.match(/^[A-D]\)/i)) {
-            options.push(line.replace(/^[A-D]\)\s*/i, ''));
-          } else if (line.match(/^Ans:/i)) {
-            ansChar = line.replace(/^Ans:\s*/i, '').trim().toUpperCase();
-          } else if (qText && options.length === 0) {
-            // Continuation of question text
-            qText += ' ' + line;
+          const qNumMatch = line.match(/^Q?(\d+)[\.\)]\s*(.*)/i);
+          if (qNumMatch && qText === '') {
+            qNumStr = qNumMatch[1];
+            qText = qNumMatch[2];
+          } else if (line.match(/^([A-D])[\.\)]/i) || line.match(/^\(([A-D])\)/i)) {
+            // It's an option!
+            const optMatch = line.match(/^[\(]?([A-D])[\.\)]?\s*(.*)/i);
+            if (optMatch) {
+              options.push(optMatch[2]);
+            }
+          } else if (options.length === 0) {
+            // Still building question text
+            qText += (qText ? '\n' : '') + line;
+          } else {
+            // Continuation of the last option
+            options[options.length - 1] += ' ' + line;
           }
         }
 
-        if (qText && options.length === 4 && ansChar) {
+        if (qText) {
+          // Ensure we have exactly 4 options
+          while (options.length < 4) options.push(`Option ${String.fromCharCode(65 + options.length)}`);
+          options = options.slice(0, 4);
+
           const correctIdx = ['A', 'B', 'C', 'D'].indexOf(ansChar);
-          const qNumMatch = block.match(/^Q(\d+)\./i);
-          const qNum = qNumMatch ? qNumMatch[1] : String(i + 1);
 
           parsedQuestions.push({
             mock_test_id: testId,
@@ -147,16 +163,16 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
             correct_option_index: correctIdx >= 0 ? correctIdx : 0,
             marks: 4,
             topic: 'General',
-            image_url: imageUrls[qNum] || null, // Map image like "1.jpg" to Q1
+            image_url: imageUrls[qNumStr] || null,
           });
         }
       }
 
       if (parsedQuestions.length === 0) {
-        throw new Error('No valid questions found. Please check the formatting.');
-      }
-
-      // 3. Save to DB sequentially to avoid rate limits
+        toast.error('Could not parse any valid questions. Please check the format.');
+        setLoading(false);
+        return;
+      }// 3. Save to DB sequentially to avoid rate limits
       const saved = [];
       for (const q of parsedQuestions) {
         const res = await saveMockQuestion(q);
