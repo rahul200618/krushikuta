@@ -81,7 +81,7 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
   const skippedCount = questions.filter(q => answers[q.id] === undefined).length;
   const pct = maxScore > 0 ? Math.round((submission.score / maxScore) * 100) : 0;
 
-  // Topic-wise analysis
+  // Subject-wise analysis
   const topicMap: Record<string, { correct: number; total: number }> = {};
   questions.forEach(q => {
     const topic = q.topic || 'General';
@@ -143,10 +143,10 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
         </div>
       </Card>
 
-      {/* Topic-wise breakdown */}
+      {/* Subject-wise breakdown */}
       {topicData.length > 0 && (
         <Card className="p-6 print:border-gray-200">
-          <h2 className="font-bold text-lg mb-4">Topic-Wise Performance</h2>
+          <h2 className="font-bold text-lg mb-4">Subject-Wise Performance</h2>
           <ResponsiveContainer width="100%" height={200} className="print:hidden">
             <BarChart data={topicData} layout="vertical" margin={{ left: 20 }}>
               <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />

@@ -118,7 +118,7 @@ export function QuestionDialog({ open, onOpenChange, testId, editingQuestion, on
               <Input type="number" value={formData.marks} onChange={e => set('marks', e.target.value)} min={1} max={10} />
             </div>
             <div className="space-y-1">
-              <Label>Topic</Label>
+              <Label>Subject</Label>
               <Input value={formData.topic} onChange={e => set('topic', e.target.value)} placeholder="e.g. Agronomy" />
             </div>
           </div>

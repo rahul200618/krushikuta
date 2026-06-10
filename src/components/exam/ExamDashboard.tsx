@@ -9,7 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, RadialBarChart,
   RadialBar, Legend, Cell,
 } from 'recharts';
-import { Trophy, Clock, TrendingUp, BookOpen, Lock, Unlock, Loader2, Star, IndianRupee, FileText } from 'lucide-react';
+import { Trophy, Clock, TrendingUp, BookOpen, Lock, Unlock, Loader2, Star, IndianRupee, FileText, ChevronLeft, Folder } from 'lucide-react';
 
 interface MockTest {
   id: number; title: string; description: string; category: string;
@@ -121,86 +121,109 @@ export function ExamDashboard({ userId, userEmail, userProfile }: ExamDashboardP
         </TabsList>
 
         <TabsContent value="tests" className="space-y-6">
-          {/* Category filter */}
-          <div className="flex gap-2 flex-wrap">
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-all ${activeCategory === cat ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:border-primary/50'}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Test cards grid */}
-          {filteredTests.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground border border-dashed rounded-2xl">
-              No tests available in this category yet.
+          {activeCategory === 'All' ? (
+            <div className="space-y-6">
+              <h2 className="text-xl font-bold">Select a Subject</h2>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {categories.filter(c => c !== 'All').map(subject => {
+                  const subjectTests = tests.filter(t => t.category === subject);
+                  return (
+                    <Card 
+                      key={subject} 
+                      className="p-6 flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:shadow-elegant hover:border-primary/50 transition-all group"
+                      onClick={() => setActiveCategory(subject)}
+                    >
+                      <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                        <Folder className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg">{subject}</h3>
+                        <p className="text-sm text-muted-foreground">{subjectTests.length} Papers</p>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredTests.map(test => {
-                const status = getTestStatus(test);
-                const attempt = (performance?.submissions || []).find(s => (s as any).test_id === test.id);
+            <div className="space-y-6">
+              <Button variant="ghost" onClick={() => setActiveCategory('All')} className="mb-2 -ml-2 text-muted-foreground hover:text-foreground">
+                <ChevronLeft className="w-4 h-4 mr-1" /> Back to Subjects
+              </Button>
+              
+              <div className="flex items-center justify-between border-b border-border pb-4">
+                <h2 className="text-2xl font-bold">{activeCategory}</h2>
+                <Badge variant="secondary">{filteredTests.length} Papers</Badge>
+              </div>
 
-                return (
-                  <Card key={test.id} className="flex flex-col overflow-hidden border-border hover:shadow-elegant transition-all group">
-                    {/* Header */}
-                    <div
-                      className="h-24 relative flex items-end p-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent"
-                      style={{ backgroundImage: test.image_url ? `url(${test.image_url})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/60" />
-                      <div className="relative flex items-center justify-between w-full">
-                        <Badge
-                          className="text-[10px] px-2 py-0.5"
-                          style={{ backgroundColor: CATEGORY_COLORS[test.category] || '#16a34a', color: '#fff' }}
-                        >
-                          {test.category}
-                        </Badge>
-                        {status === 'free' && <Badge variant="secondary" className="text-[10px]">FREE</Badge>}
-                        {status === 'unlocked' && <Badge className="text-[10px] bg-green-600 text-white"><Unlock className="w-3 h-3 mr-1" />Unlocked</Badge>}
-                        {status === 'paid' && <Badge className="text-[10px] bg-amber-600 text-white"><Lock className="w-3 h-3 mr-1" />Paid</Badge>}
-                      </div>
+              {filteredTests.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground border border-dashed rounded-2xl">
+                  No tests available in this subject yet.
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredTests.map(test => {
+                        const status = getTestStatus(test);
+                        const attempt = (performance?.submissions || []).find(s => (s as any).test_id === test.id);
+
+                        return (
+                          <Card key={test.id} className="flex flex-col overflow-hidden border-border hover:shadow-elegant transition-all group">
+                            {/* Header */}
+                            <div
+                              className="h-24 relative flex items-end p-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent"
+                              style={{ backgroundImage: test.image_url ? `url(${test.image_url})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/60" />
+                              <div className="relative flex items-center justify-between w-full">
+                                <Badge
+                                  className="text-[10px] px-2 py-0.5"
+                                  style={{ backgroundColor: CATEGORY_COLORS[test.category] || '#16a34a', color: '#fff' }}
+                                >
+                                  {test.category}
+                                </Badge>
+                                {status === 'free' && <Badge variant="secondary" className="text-[10px]">FREE</Badge>}
+                                {status === 'unlocked' && <Badge className="text-[10px] bg-green-600 text-white"><Unlock className="w-3 h-3 mr-1" />Unlocked</Badge>}
+                                {status === 'paid' && <Badge className="text-[10px] bg-amber-600 text-white"><Lock className="w-3 h-3 mr-1" />Paid</Badge>}
+                              </div>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-4 flex-1 flex flex-col gap-3">
+                              <h3 className="font-bold text-base leading-snug">{test.title}</h3>
+                              {test.description && <p className="text-xs text-muted-foreground line-clamp-2">{test.description}</p>}
+
+                              {attempt && (
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Star className="w-3 h-3 text-amber-500" />
+                                  Last score: <span className="font-semibold text-foreground">{attempt.score}</span>
+                                </div>
+                              )}
+
+                              <div className="mt-auto pt-2">
+                                {status === 'paid' ? (
+                                  <div className="space-y-2">
+                                    <p className="text-sm font-bold flex items-center gap-1">
+                                      <IndianRupee className="w-3.5 h-3.5" />{test.price}
+                                    </p>
+                                    <PurchaseFlow test={test} userEmail={userEmail} userId={userId} />
+                                  </div>
+                                ) : (
+                                  <Link to={`/exam-test/${test.id}` as any}>
+                                    <Button className="w-full gradient-primary" size="sm">
+                                      <Clock className="w-3.5 h-3.5 mr-2" />
+                                      {attempt ? 'Retake Test' : 'Start Test'}
+                                    </Button>
+                                  </Link>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
                     </div>
-
-                    {/* Body */}
-                    <div className="p-4 flex-1 flex flex-col gap-3">
-                      <h3 className="font-bold text-base leading-snug">{test.title}</h3>
-                      {test.description && <p className="text-xs text-muted-foreground line-clamp-2">{test.description}</p>}
-
-                      {attempt && (
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Star className="w-3 h-3 text-amber-500" />
-                          Last score: <span className="font-semibold text-foreground">{attempt.score}</span>
-                        </div>
-                      )}
-
-                      <div className="mt-auto pt-2">
-                        {status === 'paid' ? (
-                          <div className="space-y-2">
-                            <p className="text-sm font-bold flex items-center gap-1">
-                              <IndianRupee className="w-3.5 h-3.5" />{test.price}
-                            </p>
-                            <PurchaseFlow test={test} userEmail={userEmail} userId={userId} />
-                          </div>
-                        ) : (
-                          <Link to={`/exam-test/${test.id}` as any}>
-                            <Button className="w-full gradient-primary" size="sm">
-                              <Clock className="w-3.5 h-3.5 mr-2" />
-                              {attempt ? 'Retake Test' : 'Start Test'}
-                            </Button>
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+                  )}
+                </div>
+              )}
         </TabsContent>
 
         <TabsContent value="performance">

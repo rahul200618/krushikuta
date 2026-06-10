@@ -24,7 +24,7 @@ interface Question {
   correct_option_index: number; marks: number; topic: string; image_url?: string;
 }
 
-
+const DEFAULT_SUBJECTS = ['Practical Exam', 'General', 'AO/AAO', 'ICAR', 'Horticulture', 'Agriculture Officer'];
 
 export function ExamEditorPanel() {
   const [tests, setTests] = useState<MockTest[]>([]);
@@ -261,8 +261,12 @@ export function ExamEditorPanel() {
             <div className="space-y-1"><Label>Description</Label><Textarea value={testForm.description} onChange={e => setTestForm(p => ({ ...p, description: e.target.value }))} placeholder="Short description..." className="min-h-[60px]" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Subject (Category)</Label>
-                <Input value={testForm.category} onChange={e => setTestForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Agronomy, ICAR" required />
+                <Label>Subject</Label>
+                <Input value={testForm.category} onChange={e => setTestForm(p => ({ ...p, category: e.target.value }))} placeholder="e.g. Horticulture" list="subjects-list" />
+                <datalist id="subjects-list">
+                  {DEFAULT_SUBJECTS.map(c => <option key={c} value={c} />)}
+                  {Array.from(new Set(tests.map(t => t.category).filter(c => !DEFAULT_SUBJECTS.includes(c)))).map(c => <option key={c} value={c} />)}
+                </datalist>
               </div>
               <div className="space-y-1"><Label>Price (₹)</Label><Input type="number" value={testForm.price} onChange={e => setTestForm(p => ({ ...p, price: e.target.value }))} min={0} placeholder="0 for free" /></div>
             </div>
