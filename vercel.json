@@ -1,6 +1,10 @@
 {
   "outputDirectory": "dist/client",
+  "functions": {
+    "api/exam.js": { "maxDuration": 15 }
+  },
   "rewrites": [
+    { "source": "/api/exam", "destination": "/api/exam.js" },
     { "source": "/(.*)", "destination": "/api/index.js" }
   ]
 }

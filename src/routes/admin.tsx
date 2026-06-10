@@ -13,7 +13,8 @@ import { supabase } from "@/lib/supabase";
 import { services } from "@/lib/site-data";
 import { CheckCircle2, Circle, Trash2, Plus, FileText, Trophy, Settings, Search, Filter, X, Edit3, Image as ImageIcon, Loader2, MessageSquare } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-
+import { ExamEditorPanel } from "@/components/exam/ExamEditorPanel";
+import { AccessManagerPanel } from "@/components/exam/AccessManagerPanel";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [{ title: "Admin Dashboard — Krishikuta" }],
@@ -437,6 +438,8 @@ function AdminPage() {
             <TabsTrigger value="results" className="rounded-xl py-3 px-6 text-sm font-medium">Results</TabsTrigger>
             <TabsTrigger value="testimonials" className="rounded-xl py-3 px-6 text-sm font-medium">Testimonials</TabsTrigger>
             <TabsTrigger value="settings" className="rounded-xl py-3 px-6 text-sm font-medium">Popups</TabsTrigger>
+            <TabsTrigger value="mock-tests" className="rounded-xl py-3 px-6 text-sm font-medium">Exam Portal</TabsTrigger>
+            <TabsTrigger value="exam-access" className="rounded-xl py-3 px-6 text-sm font-medium">Exam Access</TabsTrigger>
           </TabsList>
 
           <TabsContent value="leads">
@@ -793,6 +796,14 @@ function AdminPage() {
               </div>
               {isSaving && <div className="mt-4 text-xs font-bold text-primary animate-pulse flex items-center gap-2"><Settings className="w-3 h-3 animate-spin" /> Syncing change to global database...</div>}
             </Card>
+          </TabsContent>
+
+          <TabsContent value="mock-tests">
+            <ExamEditorPanel />
+          </TabsContent>
+
+          <TabsContent value="exam-access">
+            <AccessManagerPanel />
           </TabsContent>
         </Tabs>
       </div>

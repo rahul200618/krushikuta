@@ -51,7 +51,7 @@ function Index() {
             <p className="mt-6 text-lg md:text-xl text-white/85 max-w-2xl leading-relaxed">
               Professional agri-consulting, bankable project reports, and expert guidance for modern farming ventures.
             </p>
-            <div className="mt-8 flex flex-wrap gap-16">
+            <div className="mt-8 flex flex-wrap gap-4 md:gap-6">
               <Button 
                 size="lg" 
                 className="gradient-primary text-primary-foreground hover:opacity-90 h-14 px-8 text-lg font-bold shadow-soft transition-all hover:scale-105"
@@ -59,8 +59,11 @@ function Index() {
               >
                 Explore Agriculture Services
               </Button>
+              <Button asChild size="lg" className="h-14 px-8 text-lg font-bold bg-amber-500 hover:bg-amber-600 text-white border-0 shadow-lg transition-all hover:scale-105">
+                <Link to="/exam">Access Exam Portal</Link>
+              </Button>
               <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm">
-                <Link to="/about">Learn More About Krishikuta</Link>
+                <Link to="/about">Learn More</Link>
               </Button>
             </div>
           </div>

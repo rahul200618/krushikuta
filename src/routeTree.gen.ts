@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ExamRouteImport } from './routes/exam'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as BlogRouteImport } from './routes/blog'
@@ -34,6 +35,8 @@ import { Route as ServicesCropLoansSupportRouteImport } from './routes/services/
 import { Route as ServicesAoAaoBankExamRouteImport } from './routes/services/ao-aao-bank-exam'
 import { Route as ServicesAgriConsultingReportsRouteImport } from './routes/services/agri-consulting-reports'
 import { Route as ServicesAgriConsultingDprRouteImport } from './routes/services/agri-consulting-dpr'
+import { Route as ExamTestTestIdRouteImport } from './routes/exam-test.$testId'
+import { Route as ExamReportSubmissionIdRouteImport } from './routes/exam-report.$submissionId'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 
 const ServicesRoute = ServicesRouteImport.update({
@@ -49,6 +52,11 @@ const ResultsRoute = ResultsRouteImport.update({
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExamRoute = ExamRouteImport.update({
+  id: '/exam',
+  path: '/exam',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoursesRoute = CoursesRouteImport.update({
@@ -173,6 +181,16 @@ const ServicesAgriConsultingDprRoute =
     path: '/agri-consulting-dpr',
     getParentRoute: () => ServicesRoute,
   } as any)
+const ExamTestTestIdRoute = ExamTestTestIdRouteImport.update({
+  id: '/exam-test/$testId',
+  path: '/exam-test/$testId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExamReportSubmissionIdRoute = ExamReportSubmissionIdRouteImport.update({
+  id: '/exam-report/$submissionId',
+  path: '/exam-report/$submissionId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BlogSlugRoute = BlogSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
@@ -186,10 +204,13 @@ export interface FileRoutesByFullPath {
   '/blog': typeof BlogRouteWithChildren
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
+  '/exam': typeof ExamRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
   '/blog/$slug': typeof BlogSlugRoute
+  '/exam-report/$submissionId': typeof ExamReportSubmissionIdRoute
+  '/exam-test/$testId': typeof ExamTestTestIdRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -213,9 +234,12 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
+  '/exam': typeof ExamRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/exam-report/$submissionId': typeof ExamReportSubmissionIdRoute
+  '/exam-test/$testId': typeof ExamTestTestIdRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -241,10 +265,13 @@ export interface FileRoutesById {
   '/blog': typeof BlogRouteWithChildren
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
+  '/exam': typeof ExamRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
   '/blog/$slug': typeof BlogSlugRoute
+  '/exam-report/$submissionId': typeof ExamReportSubmissionIdRoute
+  '/exam-test/$testId': typeof ExamTestTestIdRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -271,10 +298,13 @@ export interface FileRouteTypes {
     | '/blog'
     | '/contact'
     | '/courses'
+    | '/exam'
     | '/register'
     | '/results'
     | '/services'
     | '/blog/$slug'
+    | '/exam-report/$submissionId'
+    | '/exam-test/$testId'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -298,9 +328,12 @@ export interface FileRouteTypes {
     | '/admin'
     | '/contact'
     | '/courses'
+    | '/exam'
     | '/register'
     | '/results'
     | '/blog/$slug'
+    | '/exam-report/$submissionId'
+    | '/exam-test/$testId'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -325,10 +358,13 @@ export interface FileRouteTypes {
     | '/blog'
     | '/contact'
     | '/courses'
+    | '/exam'
     | '/register'
     | '/results'
     | '/services'
     | '/blog/$slug'
+    | '/exam-report/$submissionId'
+    | '/exam-test/$testId'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -354,9 +390,12 @@ export interface RootRouteChildren {
   BlogRoute: typeof BlogRouteWithChildren
   ContactRoute: typeof ContactRoute
   CoursesRoute: typeof CoursesRoute
+  ExamRoute: typeof ExamRoute
   RegisterRoute: typeof RegisterRoute
   ResultsRoute: typeof ResultsRoute
   ServicesRoute: typeof ServicesRouteWithChildren
+  ExamReportSubmissionIdRoute: typeof ExamReportSubmissionIdRoute
+  ExamTestTestIdRoute: typeof ExamTestTestIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -380,6 +419,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exam': {
+      id: '/exam'
+      path: '/exam'
+      fullPath: '/exam'
+      preLoaderRoute: typeof ExamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/courses': {
@@ -536,6 +582,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesAgriConsultingDprRouteImport
       parentRoute: typeof ServicesRoute
     }
+    '/exam-test/$testId': {
+      id: '/exam-test/$testId'
+      path: '/exam-test/$testId'
+      fullPath: '/exam-test/$testId'
+      preLoaderRoute: typeof ExamTestTestIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exam-report/$submissionId': {
+      id: '/exam-report/$submissionId'
+      path: '/exam-report/$submissionId'
+      fullPath: '/exam-report/$submissionId'
+      preLoaderRoute: typeof ExamReportSubmissionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blog/$slug': {
       id: '/blog/$slug'
       path: '/$slug'
@@ -606,9 +666,12 @@ const rootRouteChildren: RootRouteChildren = {
   BlogRoute: BlogRouteWithChildren,
   ContactRoute: ContactRoute,
   CoursesRoute: CoursesRoute,
+  ExamRoute: ExamRoute,
   RegisterRoute: RegisterRoute,
   ResultsRoute: ResultsRoute,
   ServicesRoute: ServicesRouteWithChildren,
+  ExamReportSubmissionIdRoute: ExamReportSubmissionIdRoute,
+  ExamTestTestIdRoute: ExamTestTestIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
