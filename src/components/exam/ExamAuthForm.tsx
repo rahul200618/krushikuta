@@ -129,14 +129,29 @@ export function ExamAuthForm({ onSuccess, isModal = false }: ExamAuthFormProps) 
 
       const uid = data.user?.id;
       if (uid) {
-        // 2. Save Student Profile in Database
-        await saveProfile(uid, {
-          name,
-          email,
-          mobile,
-          district,
-          college,
-        });
+        // 2. Save Student Profile in Database (try direct client upsert first as authenticated user)
+        const { error: profileError } = await supabase
+          .from('student_profiles')
+          .upsert({
+            firebase_uid: uid,
+            name,
+            email,
+            mobile,
+            district,
+            college,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'firebase_uid' });
+
+        if (profileError) {
+          console.warn('Direct client-side profile upsert failed, falling back to API:', profileError);
+          await saveProfile(uid, {
+            name,
+            email,
+            mobile,
+            district,
+            college,
+          });
+        }
       }
 
       toast.success('Account created successfully!');

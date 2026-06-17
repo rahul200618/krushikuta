@@ -135,14 +135,31 @@ function AuthPage() {
       }
 
       if (uid) {
-        await saveProfile(uid, {
-          name,
-          email,
-          mobile,
-          district,
-          college,
-          category: degree // Store degree under the category column
-        });
+        // Try direct client upsert first as authenticated user
+        const { error: profileError } = await supabase
+          .from('student_profiles')
+          .upsert({
+            firebase_uid: uid,
+            name,
+            email,
+            mobile,
+            district,
+            college,
+            category: degree, // Store degree under the category column
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'firebase_uid' });
+
+        if (profileError) {
+          console.warn('Direct client-side profile upsert failed, falling back to API:', profileError);
+          await saveProfile(uid, {
+            name,
+            email,
+            mobile,
+            district,
+            college,
+            category: degree // Store degree under the category column
+          });
+        }
       }
       toast.success('Successfully logged in and profile saved! Welcome to Krishikuta 🎉');
       navigate({ to: '/ao/aao' as any });
