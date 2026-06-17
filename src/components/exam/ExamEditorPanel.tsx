@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 interface MockTest {
   id: number; title: string; description: string; category: string;
   price: number; image_url?: string; is_active: boolean; is_free?: boolean;
+  popup_message?: string;
 }
 
 interface Question {
@@ -46,6 +47,7 @@ export function ExamEditorPanel() {
   const [testForm, setTestForm] = useState({
     title: '', description: '', category: 'General', price: '0',
     image_url: '', is_active: true, is_free: false,
+    released_date: '', releasing_date: '', status: 'UPCOMING'
   });
 
   useEffect(() => { fetchTests(); }, []);
@@ -80,13 +82,19 @@ export function ExamEditorPanel() {
 
   const openCreateTest = () => {
     setEditingTest(null);
-    setTestForm({ title: '', description: '', category: 'General', price: '0', image_url: '', is_active: true, is_free: false });
+    setTestForm({ title: '', description: '', category: 'General', price: '0', image_url: '', is_active: true, is_free: false, released_date: '', releasing_date: '', status: 'UPCOMING' });
     setTestDialogOpen(true);
   };
 
   const openEditTest = (test: MockTest) => {
     setEditingTest(test);
-    setTestForm({ title: test.title, description: test.description || '', category: test.category || 'General', price: String(test.price), image_url: test.image_url || '', is_active: test.is_active, is_free: !!test.is_free });
+    let sched = { released_date: '', releasing_date: '', status: 'UPCOMING' };
+    try {
+      if (test.popup_message && test.popup_message.startsWith('{')) {
+        sched = JSON.parse(test.popup_message);
+      }
+    } catch (e) { /* ignore */ }
+    setTestForm({ title: test.title, description: test.description || '', category: test.category || 'General', price: String(test.price), image_url: test.image_url || '', is_active: test.is_active, is_free: !!test.is_free, ...sched });
     setTestDialogOpen(true);
   };
 
@@ -102,6 +110,11 @@ export function ExamEditorPanel() {
         image_url: testForm.image_url || null,
         is_active: testForm.is_active,
         is_free: testForm.is_free,
+        popup_message: testForm.category === 'Premium Series' ? JSON.stringify({
+          released_date: testForm.released_date,
+          releasing_date: testForm.releasing_date,
+          status: testForm.status
+        }) : null,
       };
       const res = await saveMockTest(payload);
       if (editingTest) {
@@ -272,6 +285,27 @@ export function ExamEditorPanel() {
               <div className="space-y-1"><Label>Price (₹)</Label><Input type="number" value={testForm.price} onChange={e => setTestForm(p => ({ ...p, price: e.target.value }))} min={0} placeholder="0 for free" /></div>
             </div>
             <div className="space-y-1"><Label>Cover Image URL (optional)</Label><Input value={testForm.image_url} onChange={e => setTestForm(p => ({ ...p, image_url: e.target.value }))} placeholder="https://..." /></div>
+            
+            {testForm.category === 'Premium Series' && (
+              <div className="p-3 bg-muted/30 rounded-xl space-y-3 border">
+                <p className="text-xs font-semibold text-primary">Premium Schedule Settings</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1"><Label>Released Date</Label><Input value={testForm.released_date} onChange={e => setTestForm(p => ({ ...p, released_date: e.target.value }))} placeholder="e.g. 10/06/2026" /></div>
+                  <div className="space-y-1"><Label>Releasing Date</Label><Input value={testForm.releasing_date} onChange={e => setTestForm(p => ({ ...p, releasing_date: e.target.value }))} placeholder="e.g. -" /></div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <Select value={testForm.status} onValueChange={v => setTestForm(p => ({ ...p, status: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="RELEASED">RELEASED</SelectItem>
+                      <SelectItem value="UPCOMING">UPCOMING</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-3">
                 <input type="checkbox" id="is_active" checked={testForm.is_active} onChange={e => setTestForm(p => ({ ...p, is_active: e.target.checked }))} className="w-4 h-4 accent-primary" />

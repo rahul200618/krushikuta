@@ -1,33 +1,23 @@
-import { createFileRoute, useNavigate, redirect } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { listMockTests, getUserPerformance, listUserAccess } from '@/lib/exam-api';
-import { Card } from '@/components/ui/card';
+import { listMockTests, checkUserAccess } from '@/lib/exam-api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { PageHero } from '@/components/site/PageHero';
-import { Loader2, Clock, Unlock, Lock, Star, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, BookOpen } from 'lucide-react';
 import { ExamAuthModal } from '@/components/exam/ExamAuthModal';
 
 export const Route = createFileRoute('/exam_/premium')({
-  component: PremiumExamsPage,
+  component: PremiumSchedulePage,
   head: () => ({
-    meta: [{ title: 'Premium Exams — Krishikuta' }],
+    meta: [{ title: 'Premium Schedule — Krishikuta' }],
   }),
 });
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'Practical Exam': '#16a34a',
-  'General': '#2563eb',
-  'AO/AAO': '#d97706',
-  'ICAR': '#7c3aed',
-};
-
-function PremiumExamsPage() {
+function PremiumSchedulePage() {
   const navigate = useNavigate();
   const [tests, setTests] = useState<any[]>([]);
-  const [performance, setPerformance] = useState<any>(null);
-  const [accessList, setAccessList] = useState<number[]>([]);
+  const [hasAccess, setHasAccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -44,23 +34,15 @@ function PremiumExamsPage() {
       try {
         const testsRes = await listMockTests();
         const allTests = testsRes.tests || [];
-        // Only premium tests
-        setTests(allTests.filter((t: any) => t.is_active && !t.is_free && t.price > 0));
+        setTests(allTests.filter((t: any) => t.is_active && t.category === 'Premium Series'));
 
         if (session?.user?.id) {
-          const [perfRes, accessRes] = await Promise.all([
-            getUserPerformance(session.user.id),
-            listUserAccess(session.user.id)
-          ]);
-          setPerformance(perfRes);
-          
-          const userAccess = accessRes.access.filter((a: any) => a.user_id === session.user.id && a.status === 'active');
-          if (userAccess.length > 0) {
-            setAccessList(userAccess.map((a: any) => a.mock_test_id));
-          } else {
-            // If they reach here but have no access at all, we could redirect them
-            // But let's just let them see the locked tests for now.
+          const { access } = await checkUserAccess(session.user.id, []);
+          if (access && access.includes(-1)) { // -1 represents the premium bundle
+            setHasAccess(true);
           }
+        } else {
+          setHasAccess(false);
         }
       } catch { } finally {
         setLoading(false);
@@ -69,96 +51,135 @@ function PremiumExamsPage() {
     load();
   }, [session]);
 
-  const getTestStatus = (test: any): 'free' | 'unlocked' | 'paid' => {
-    if (test.is_free || test.price === 0) return 'free';
-    if (accessList.includes(test.id) || accessList.includes(-1)) return 'unlocked';
-    return 'paid';
+  const handleActionClick = (test: any) => {
+    if (!session) {
+      setShowAuthModal(true);
+      return;
+    }
+    if (hasAccess) {
+      navigate({ to: `/exam-test/${test.id}` as any });
+    } else {
+      navigate({ to: '/exam-checkout' });
+    }
   };
 
-  const renderTestCard = (test: any) => {
-    const status = getTestStatus(test);
-    const attempt = (performance?.submissions || []).find((s: any) => s.test_id === test.id);
+  const handleUnlockClick = () => {
+    if (!session) {
+      setShowAuthModal(true);
+      return;
+    }
+    navigate({ to: '/exam-checkout' });
+  };
 
-    return (
-      <Card key={test.id} className="flex flex-col overflow-hidden border-border hover:shadow-elegant transition-all group">
-        <div
-          className="h-24 relative flex items-end p-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent"
-          style={{ backgroundImage: test.image_url ? `url(${test.image_url})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/60" />
-          <div className="relative flex items-center justify-between w-full">
-            <Badge
-              className="text-[10px] px-2 py-0.5"
-              style={{ backgroundColor: CATEGORY_COLORS[test.category] || '#16a34a', color: '#fff' }}
-            >
-              {test.category}
-            </Badge>
-            {status === 'unlocked' && <Badge className="text-[10px] bg-green-600 text-white border-0 shadow-sm"><Unlock className="w-3 h-3 mr-1" />Unlocked</Badge>}
-            {status === 'paid' && <Badge className="text-[10px] bg-amber-600 text-white border-0 shadow-sm"><Lock className="w-3 h-3 mr-1" />Locked</Badge>}
-          </div>
-        </div>
-
-        <div className="p-4 flex-1 flex flex-col gap-3">
-          <h3 className="font-bold text-base leading-snug">{test.title}</h3>
-          {test.description && <p className="text-xs text-muted-foreground line-clamp-2">{test.description}</p>}
-
-          {attempt && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Star className="w-3 h-3 text-amber-500" />
-              Last score: <span className="font-semibold text-foreground">{attempt.score}</span>
-            </div>
-          )}
-
-          <div className="mt-auto pt-2">
-            {status === 'paid' ? (
-              <Button disabled className="w-full bg-muted text-muted-foreground border-border" size="sm">
-                <Lock className="w-3.5 h-3.5 mr-2" />Locked
-              </Button>
-            ) : (
-              <Button 
-                className="w-full gradient-primary" 
-                size="sm"
-                onClick={() => {
-                  if (!session) setShowAuthModal(true);
-                  else navigate({ to: `/exam-test/${test.id}` as any });
-                }}
-              >
-                <Clock className="w-3.5 h-3.5 mr-2" />
-                {attempt ? 'Retake Test' : 'Start Test'}
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
-    );
+  const parseSchedule = (test: any) => {
+    try {
+      if (test.popup_message && test.popup_message.startsWith('{')) {
+        return JSON.parse(test.popup_message);
+      }
+    } catch { }
+    return { released_date: '-', releasing_date: '-', status: 'UPCOMING' };
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <PageHero 
-        title="Premium Mock Tests"
-        description="Your unlocked premium mock tests and analytics."
-      />
-      <div className="max-w-7xl mx-auto px-4 py-12">
-        <Button variant="ghost" onClick={() => navigate({ to: '/exam' })} className="mb-8 -ml-4">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Exam Dashboard
-        </Button>
+    <div className="min-h-screen bg-slate-50/50">
+      {/* Simple Header */}
+      <div className="bg-white border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center">
+          <Button variant="outline" size="sm" onClick={() => navigate({ to: '/exam' })} className="rounded-full">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back
+          </Button>
+        </div>
+      </div>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {tests.map(renderTestCard)}
-            {tests.length === 0 && (
-              <div className="col-span-full py-12 text-center text-muted-foreground">
-                No premium exams available at the moment.
+      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+        
+        {/* Banner */}
+        {!hasAccess && (
+          <div className="bg-emerald-50 rounded-2xl p-6 md:p-8 border border-emerald-100 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-green-500" />
+            <div className="space-y-2 relative z-10">
+              <div className="text-emerald-600 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                BEST VALUE DEAL
               </div>
-            )}
+              <h1 className="text-2xl md:text-3xl font-serif text-slate-800 leading-tight">less than 14rs per question paper</h1>
+              <p className="text-sm text-slate-600 max-w-lg">Get complete access to all 20 subjects, 140+ mock tests at an unbeatable price.</p>
+            </div>
+            <Button onClick={handleUnlockClick} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow-lg transition-all rounded-full px-8 py-6 text-sm font-semibold whitespace-nowrap relative z-10">
+              Unlock Now for ₹3,000
+            </Button>
           </div>
         )}
+
+        {/* Table Container */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="font-bold text-slate-800 font-serif">Mock Test Series Release Schedule</h2>
+          </div>
+
+          <div className="overflow-x-auto">
+            {loading ? (
+              <div className="flex justify-center items-center py-24">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+              </div>
+            ) : (
+              <table className="w-full text-sm text-left">
+                <thead className="text-[10px] text-slate-500 uppercase tracking-wider bg-slate-50/80 border-b border-slate-100">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">SUBJECT</th>
+                    <th className="px-6 py-4 font-semibold">RELEASED DATE</th>
+                    <th className="px-6 py-4 font-semibold">RELEASING DATE</th>
+                    <th className="px-6 py-4 font-semibold">STATUS</th>
+                    <th className="px-6 py-4 font-semibold text-right">ACTION</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100/80">
+                  {tests.map((test) => {
+                    const sched = parseSchedule(test);
+                    const isReleased = sched.status === 'RELEASED';
+                    
+                    return (
+                      <tr key={test.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-6 py-4 font-medium text-slate-800 flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                            <BookOpen className="w-4 h-4" />
+                          </div>
+                          {test.title}
+                        </td>
+                        <td className="px-6 py-4 text-slate-600">{sched.released_date || '-'}</td>
+                        <td className="px-6 py-4 text-slate-600">{sched.releasing_date || '-'}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant="outline" className={`text-[10px] font-bold border-0 ${isReleased ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                            {sched.status}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Button 
+                            size="sm"
+                            disabled={!isReleased}
+                            onClick={() => handleActionClick(test)}
+                            className={isReleased ? "bg-emerald-600 hover:bg-emerald-700 text-white rounded-md px-6 shadow-sm" : "bg-slate-100 text-slate-400 hover:bg-slate-100 cursor-not-allowed rounded-md px-6"}
+                          >
+                            Open
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {tests.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                        No subjects available in the schedule yet. Add them from the admin dashboard!
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       </div>
+      
       {showAuthModal && <ExamAuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} onSuccess={() => setShowAuthModal(false)} />}
     </div>
   );

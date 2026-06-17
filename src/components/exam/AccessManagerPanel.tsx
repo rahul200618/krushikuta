@@ -65,20 +65,22 @@ export function AccessManagerPanel() {
     if (!grantEmail || !grantTestId) { toast.error('Enter student email and select a test'); return; }
     
     const student = students.find(s => s.email?.toLowerCase() === grantEmail.toLowerCase().trim());
-    if (!student || !student.firebase_uid) {
-      toast.error('No student found with this email. Ask them to sign in first.');
-      return;
-    }
 
     setGrantLoading(true);
     try {
       const testId = parseInt(grantTestId);
-      await grantAccess({ userId: student.firebase_uid, testId, email: grantEmail, amount: 0, paymentMethod: 'Admin Granted' });
+      await grantAccess({ 
+        userId: student?.firebase_uid || '', 
+        testId, 
+        email: grantEmail.trim(), 
+        amount: 0, 
+        paymentMethod: 'Admin Granted' 
+      });
       toast.success('Access granted!');
       setGrantEmail(''); setGrantTestId('');
       fetchAll();
-    } catch (err: unknown) {
-      toast.error((err as Error).message);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to grant access');
     } finally {
       setGrantLoading(false);
     }
@@ -92,16 +94,19 @@ export function AccessManagerPanel() {
     } catch { toast.error('Failed to revoke'); }
   };
 
+  const handleRegrant = async (userId: string, testId: number, email: string) => {
+    try {
+      await grantAccess({ userId, testId, email, amount: 0, paymentMethod: 'Admin Granted' });
+      setPurchases(p => p.map(pu => pu.user_id === userId && pu.mock_test_id === testId ? { ...pu, status: 'active' } : pu));
+      toast.success('Access re-granted');
+    } catch { toast.error('Failed to re-grant'); }
+  };
+
   const handleApprovePayment = async (req: PaymentRequest) => {
     try {
-      // Find student profile by email
       const profile = students.find(s => s.email === req.user_email);
-      if (!profile) {
-        toast.error('Student profile not found. Ask them to sign in.');
-        return;
-      }
       
-      await updatePaymentRequest(req.id, 'approved', profile.firebase_uid);
+      await updatePaymentRequest(req.id, 'approved', profile?.firebase_uid);
       setPaymentReqs(p => p.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
       toast.success('Payment approved & access granted!');
       fetchAll();
@@ -235,7 +240,7 @@ export function AccessManagerPanel() {
                             <ShieldX className="w-3.5 h-3.5 mr-1" />Revoke
                           </Button>
                         ) : (
-                          <Button size="sm" variant="ghost" className="text-green-600 text-xs h-7" onClick={() => grantAccess({ userId: p.user_id, testId: p.mock_test_id, email: p.email })}>
+                          <Button size="sm" variant="ghost" className="text-green-600 text-xs h-7" onClick={() => handleRegrant(p.user_id, p.mock_test_id, p.email)}>
                             <ShieldCheck className="w-3.5 h-3.5 mr-1" />Re-grant
                           </Button>
                         )}

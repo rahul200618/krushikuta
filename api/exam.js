@@ -380,14 +380,19 @@ export default async function handler(req, res) {
 
       case 'check-user-access': {
         const { userId, testIds } = payload;
-        const { data, error } = await supabase
+        let query = supabase
           .from('user_purchases')
           .select('mock_test_id')
           .eq('user_id', userId)
-          .eq('status', 'active')
-          .in('mock_test_id', testIds);
+          .eq('status', 'active');
+        
+        if (testIds && testIds.length > 0) {
+          query = query.in('mock_test_id', testIds);
+        }
+        
+        const { data, error } = await query;
         if (error) throw error;
-        return res.status(200).json({ accessList: data.map(d => d.mock_test_id) });
+        return res.status(200).json({ access: data.map(d => d.mock_test_id) });
       }
 
       default:

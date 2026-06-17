@@ -275,7 +275,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
                     <Button 
                       onClick={() => {
                         if (!userId) onRequireAuth?.();
-                        else navigate({ to: '/exam-checkout' });
+                        else navigate({ to: '/exam/premium' });
                       }} 
                       className="bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/20 px-8 py-6 text-lg rounded-full w-full md:w-auto"
                     >
