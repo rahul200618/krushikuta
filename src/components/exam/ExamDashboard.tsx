@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import { listMockTests, getUserPerformance, checkUserAccess } from '@/lib/exam-api';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { listMockTests, getUserPerformance, listUserAccess, checkUserAccess } from '@/lib/exam-api';
+import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,7 @@ import { Trophy, Clock, TrendingUp, BookOpen, Lock, Unlock, Loader2, Star, India
 
 interface MockTest {
   id: number; title: string; description: string; category: string;
-  price: number; image_url?: string; is_active: boolean;
+  price: number; image_url?: string; is_active: boolean; is_free?: boolean;
 }
 
 interface Performance {
@@ -22,9 +23,10 @@ interface Performance {
 }
 
 interface ExamDashboardProps {
-  userId: string;
-  userEmail: string;
-  userProfile: Record<string, unknown> | null;
+  userId?: string;
+  userEmail?: string;
+  userProfile?: Record<string, any> | null;
+  onRequireAuth?: () => void;
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -34,12 +36,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   'ICAR': '#7c3aed',
 };
 
-export function ExamDashboard({ userId, userEmail, userProfile }: ExamDashboardProps) {
+export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }: ExamDashboardProps) {
   const [tests, setTests] = useState<MockTest[]>([]);
   const [performance, setPerformance] = useState<Performance | null>(null);
   const [accessList, setAccessList] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [pendingPayment, setPendingPayment] = useState<any>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -47,31 +51,116 @@ export function ExamDashboard({ userId, userEmail, userProfile }: ExamDashboardP
       try {
         const [testsRes, perfRes] = await Promise.all([
           listMockTests(),
-          getUserPerformance(userId),
+          userId ? getUserPerformance(userId) : Promise.resolve(null),
         ]);
         const allTests: MockTest[] = testsRes.tests || [];
         setTests(allTests.filter(t => t.is_active));
         setPerformance(perfRes);
 
-        const paidIds = allTests.filter(t => t.price > 0).map(t => t.id);
-        if (paidIds.length > 0) {
-          const accessRes = await checkUserAccess(userId, paidIds);
-          setAccessList(accessRes.accessList || []);
+        if (userId) {
+          const { access } = await checkUserAccess(userId, []);
+          if (access && access.length > 0) {
+            setAccessList(access);
+          }
+          
+          if (userEmail) {
+            const { data } = await supabase.from('payment_requests').select('*').eq('user_email', userEmail).order('created_at', { ascending: false }).limit(1);
+            if (data && data.length > 0 && data[0].status === 'pending') {
+              setPendingPayment(data[0]);
+            }
+          }
         }
       } catch { /* silent */ } finally {
         setLoading(false);
       }
     };
     load();
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    if (userId) {
+      channel = supabase.channel('user-purchases-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'user_purchases', filter: `user_id=eq.${userId}` },
+          () => {
+            // Re-fetch when access changes
+            load();
+          }
+        )
+        .subscribe();
+    }
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [userId]);
 
   const categories = ['All', ...Array.from(new Set(tests.map(t => t.category).filter(Boolean)))];
   const filteredTests = activeCategory === 'All' ? tests : tests.filter(t => t.category === activeCategory);
 
   const getTestStatus = (test: MockTest): 'free' | 'unlocked' | 'paid' => {
-    if (test.price === 0) return 'free';
+    if (test.is_free || test.price === 0) return 'free';
     if (accessList.includes(test.id) || accessList.includes(-1)) return 'unlocked';
     return 'paid';
+  };
+
+  const renderTestCard = (test: MockTest) => {
+    const status = getTestStatus(test);
+    const attempt = (performance?.submissions || []).find(s => (s as any).test_id === test.id);
+
+    return (
+      <Card key={test.id} className="flex flex-col overflow-hidden border-border hover:shadow-elegant transition-all group">
+        <div
+          className="h-24 relative flex items-end p-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent"
+          style={{ backgroundImage: test.image_url ? `url(${test.image_url})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/60" />
+          <div className="relative flex items-center justify-between w-full">
+            <Badge
+              className="text-[10px] px-2 py-0.5"
+              style={{ backgroundColor: CATEGORY_COLORS[test.category] || '#16a34a', color: '#fff' }}
+            >
+              {test.category}
+            </Badge>
+            {status === 'free' && <Badge className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white border-0 shadow-sm"><Unlock className="w-3 h-3 mr-1" />FREE</Badge>}
+            {status === 'unlocked' && <Badge className="text-[10px] bg-green-600 text-white border-0 shadow-sm"><Unlock className="w-3 h-3 mr-1" />Unlocked</Badge>}
+            {status === 'paid' && <Badge className="text-[10px] bg-amber-600 text-white border-0 shadow-sm"><Lock className="w-3 h-3 mr-1" />Paid</Badge>}
+          </div>
+        </div>
+
+        <div className="p-4 flex-1 flex flex-col gap-3">
+          <h3 className="font-bold text-base leading-snug">{test.title}</h3>
+          {test.description && <p className="text-xs text-muted-foreground line-clamp-2">{test.description}</p>}
+
+          {attempt && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <Star className="w-3 h-3 text-amber-500" />
+              Last score: <span className="font-semibold text-foreground">{attempt.score}</span>
+            </div>
+          )}
+
+          <div className="mt-auto pt-2">
+            {status === 'paid' ? (
+              <Button disabled className="w-full bg-muted text-muted-foreground border-border" size="sm">
+                <Lock className="w-3.5 h-3.5 mr-2" />Locked
+              </Button>
+            ) : (
+              <Button 
+                className="w-full gradient-primary" 
+                size="sm"
+                onClick={() => {
+                  if (!userId) onRequireAuth?.();
+                  else navigate({ to: `/exam-test/${test.id}` as any });
+                }}
+              >
+                <Clock className="w-3.5 h-3.5 mr-2" />
+                {attempt ? 'Retake Test' : 'Start Test'}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
   };
 
   const chartData = (performance?.submissions || [])
@@ -92,16 +181,20 @@ export function ExamDashboard({ userId, userEmail, userProfile }: ExamDashboardP
     );
   }
 
+  const accessibleTests = accessList.includes(-1) ? tests : tests.filter(t => getTestStatus(t) === 'free' || getTestStatus(t) === 'unlocked');
+
+  const stats = [
+    { icon: BookOpen, label: 'Tests Available', value: accessibleTests.length, color: 'text-blue-600' },
+    { icon: FileText, label: 'Attempts', value: performance?.totalAttempts ?? 0, color: 'text-green-600' },
+    { icon: TrendingUp, label: 'Avg Score', value: `${performance?.averageScore ?? 0}%`, color: 'text-amber-600' },
+    { icon: Trophy, label: 'Total Questions', value: `${accessibleTests.reduce((acc, t) => acc + (t.total_questions ?? 0), 0)}`, color: 'text-purple-600' },
+  ];
+
   return (
     <div className="space-y-8">
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { icon: BookOpen, label: 'Tests Available', value: tests.length, color: 'text-blue-600' },
-          { icon: FileText, label: 'Attempts', value: performance?.totalAttempts ?? 0, color: 'text-green-600' },
-          { icon: TrendingUp, label: 'Avg Score', value: `${performance?.averageScore ?? 0}`, color: 'text-amber-600' },
-          { icon: Trophy, label: 'Best Score', value: `${performance?.bestScore ?? 0}`, color: 'text-purple-600' },
-        ].map(({ icon: Icon, label, value, color }) => (
+        {stats.map(({ icon: Icon, label, value, color }) => (
           <Card key={label} className="p-4 flex items-center gap-4 border-border hover:shadow-soft transition-all">
             <div className={`w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0 ${color}`}>
               <Icon className="w-5 h-5" />
@@ -121,109 +214,78 @@ export function ExamDashboard({ userId, userEmail, userProfile }: ExamDashboardP
         </TabsList>
 
         <TabsContent value="tests" className="space-y-6">
-          {activeCategory === 'All' ? (
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold">Select a Subject</h2>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {categories.filter(c => c !== 'All').map(subject => {
-                  const subjectTests = tests.filter(t => t.category === subject);
-                  return (
-                    <Card 
-                      key={subject} 
-                      className="p-6 flex flex-col items-center justify-center text-center gap-4 cursor-pointer hover:shadow-elegant hover:border-primary/50 transition-all group"
-                      onClick={() => setActiveCategory(subject)}
-                    >
-                      <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                        <Folder className="w-8 h-8" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg">{subject}</h3>
-                        <p className="text-sm text-muted-foreground">{subjectTests.length} Papers</p>
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <Button variant="ghost" onClick={() => setActiveCategory('All')} className="mb-2 -ml-2 text-muted-foreground hover:text-foreground">
-                <ChevronLeft className="w-4 h-4 mr-1" /> Back to Subjects
-              </Button>
+          <div className="space-y-8">
+            {/* Promo Cards Grid */}
+            <div className={`grid gap-6 ${!accessList.includes(-1) ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
               
-              <div className="flex items-center justify-between border-b border-border pb-4">
-                <h2 className="text-2xl font-bold">{activeCategory}</h2>
-                <Badge variant="secondary">{filteredTests.length} Papers</Badge>
-              </div>
+              {/* Free Exams Promo Card */}
+              {tests.filter(t => getTestStatus(t) === 'free').length > 0 && (
+                <Card className="p-8 bg-gradient-to-br from-emerald-50 to-green-50/50 border-emerald-200 flex flex-col items-start gap-4 overflow-hidden relative group">
+                  <div className="absolute right-0 bottom-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl -mr-10 -mb-10 pointer-events-none group-hover:bg-emerald-500/20 transition-all duration-700" />
+                  <div className="space-y-2 relative z-10 w-full">
+                    <h2 className="text-2xl font-extrabold text-emerald-900 flex items-center gap-2">
+                      <Unlock className="w-6 h-6 text-emerald-600" /> Free Exams
+                    </h2>
+                    <p className="text-emerald-800/80">Access our collection of free mock tests and practice materials to get started.</p>
+                  </div>
+                  <div className="relative z-10 mt-auto w-full md:w-auto pt-4">
+                    <Button 
+                      onClick={() => navigate({ to: '/exam/free' })} 
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 px-8 py-6 text-lg rounded-full w-full md:w-auto"
+                    >
+                      Open
+                    </Button>
+                  </div>
+                </Card>
+              )}
 
-              {filteredTests.length === 0 ? (
-                <div className="text-center py-16 text-muted-foreground border border-dashed rounded-2xl">
-                  No tests available in this subject yet.
+              {/* Premium Promo Card */}
+              <Card className="p-8 bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200 flex flex-col items-start gap-4 overflow-hidden relative group">
+                <div className="absolute right-0 bottom-0 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl -mr-10 -mb-10 pointer-events-none group-hover:bg-amber-500/20 transition-all duration-700" />
+                <div className="space-y-2 relative z-10 w-full">
+                  <h2 className="text-2xl font-extrabold text-amber-900 flex items-center gap-2">
+                    {accessList.includes(-1) ? (
+                      <><Unlock className="w-6 h-6 text-amber-600" /> Premium Access</>
+                    ) : (
+                      <><Lock className="w-6 h-6 text-amber-600" /> Get Full Access</>
+                    )}
+                  </h2>
+                  <p className="text-amber-800/80">
+                    {accessList.includes(-1) 
+                      ? "You have unrestricted access to all premium mock tests, previous year papers, and analytics." 
+                      : "Get unrestricted access to all premium mock tests, previous year papers, and detailed performance analytics."}
+                  </p>
                 </div>
-              ) : (
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {filteredTests.map(test => {
-                        const status = getTestStatus(test);
-                        const attempt = (performance?.submissions || []).find(s => (s as any).test_id === test.id);
-
-                        return (
-                          <Card key={test.id} className="flex flex-col overflow-hidden border-border hover:shadow-elegant transition-all group">
-                            {/* Header */}
-                            <div
-                              className="h-24 relative flex items-end p-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent"
-                              style={{ backgroundImage: test.image_url ? `url(${test.image_url})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}
-                            >
-                              <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/60" />
-                              <div className="relative flex items-center justify-between w-full">
-                                <Badge
-                                  className="text-[10px] px-2 py-0.5"
-                                  style={{ backgroundColor: CATEGORY_COLORS[test.category] || '#16a34a', color: '#fff' }}
-                                >
-                                  {test.category}
-                                </Badge>
-                                {status === 'free' && <Badge variant="secondary" className="text-[10px]">FREE</Badge>}
-                                {status === 'unlocked' && <Badge className="text-[10px] bg-green-600 text-white"><Unlock className="w-3 h-3 mr-1" />Unlocked</Badge>}
-                                {status === 'paid' && <Badge className="text-[10px] bg-amber-600 text-white"><Lock className="w-3 h-3 mr-1" />Paid</Badge>}
-                              </div>
-                            </div>
-
-                            {/* Body */}
-                            <div className="p-4 flex-1 flex flex-col gap-3">
-                              <h3 className="font-bold text-base leading-snug">{test.title}</h3>
-                              {test.description && <p className="text-xs text-muted-foreground line-clamp-2">{test.description}</p>}
-
-                              {attempt && (
-                                <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Star className="w-3 h-3 text-amber-500" />
-                                  Last score: <span className="font-semibold text-foreground">{attempt.score}</span>
-                                </div>
-                              )}
-
-                              <div className="mt-auto pt-2">
-                                {status === 'paid' ? (
-                                  <div className="space-y-2">
-                                    <p className="text-sm font-bold flex items-center gap-1">
-                                      <IndianRupee className="w-3.5 h-3.5" />{test.price}
-                                    </p>
-                                    <PurchaseFlow test={test} userEmail={userEmail} userId={userId} />
-                                  </div>
-                                ) : (
-                                  <Link to={`/exam-test/${test.id}` as any}>
-                                    <Button className="w-full gradient-primary" size="sm">
-                                      <Clock className="w-3.5 h-3.5 mr-2" />
-                                      {attempt ? 'Retake Test' : 'Start Test'}
-                                    </Button>
-                                  </Link>
-                                )}
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
+                <div className="relative z-10 mt-auto w-full md:w-auto pt-4 flex gap-3">
+                  {accessList.includes(-1) ? (
+                    <Button 
+                      onClick={() => navigate({ to: '/exam/premium' })} 
+                      className="bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/20 px-8 py-6 text-lg rounded-full w-full md:w-auto"
+                    >
+                      Open Now
+                    </Button>
+                  ) : pendingPayment ? (
+                    <Button 
+                      onClick={() => navigate({ to: '/exam-checkout' })} 
+                      className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 px-8 py-6 text-lg rounded-full w-full md:w-auto"
+                    >
+                      Pending (Edit UTR)
+                    </Button>
+                  ) : (
+                    <Button 
+                      onClick={() => {
+                        if (!userId) onRequireAuth?.();
+                        else navigate({ to: '/exam-checkout' });
+                      }} 
+                      className="bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-600/20 px-8 py-6 text-lg rounded-full w-full md:w-auto"
+                    >
+                      Unlock Now
+                    </Button>
                   )}
                 </div>
-              )}
+              </Card>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="performance">
@@ -317,48 +379,3 @@ export function ExamDashboard({ userId, userEmail, userProfile }: ExamDashboardP
   );
 }
 
-// Inline purchase flow component
-function PurchaseFlow({ test, userEmail, userId }: { test: MockTest; userEmail: string; userId: string }) {
-  const [mode, setMode] = useState<'idle' | 'utr'>('idle');
-  const [utr, setUtr] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
-
-  const handleSubmitUTR = async () => {
-    if (!utr.trim()) return;
-    setSubmitting(true);
-    try {
-      const { submitPaymentRequest } = await import('@/lib/exam-api');
-      await submitPaymentRequest(userEmail, utr, test.price);
-      setDone(true);
-    } catch { /* silent */ } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (done) return <p className="text-xs text-green-600 font-medium">✓ Payment request submitted! Admin will verify within 24h.</p>;
-
-  if (mode === 'utr') return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">Transfer ₹{test.price} to our UPI and enter the UTR/Transaction ID below.</p>
-      <div className="flex gap-2">
-        <input
-          className="flex-1 text-xs border border-border rounded-lg px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder="UTR / Txn ID"
-          value={utr}
-          onChange={e => setUtr(e.target.value)}
-        />
-        <Button size="sm" className="gradient-primary text-xs" onClick={handleSubmitUTR} disabled={submitting}>
-          {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Submit'}
-        </Button>
-      </div>
-      <button onClick={() => setMode('idle')} className="text-[10px] text-muted-foreground hover:underline">Cancel</button>
-    </div>
-  );
-
-  return (
-    <Button size="sm" variant="outline" className="w-full text-xs border-amber-500 text-amber-700 hover:bg-amber-50" onClick={() => setMode('utr')}>
-      <IndianRupee className="w-3 h-3 mr-1" />Pay & Submit UTR
-    </Button>
-  );
-}

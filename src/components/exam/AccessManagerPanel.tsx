@@ -101,14 +101,7 @@ export function AccessManagerPanel() {
         return;
       }
       
-      // Match test by price
-      const matchedTest = tests.find(t => Number(t.price) === Number(req.amount));
-      if (!matchedTest) {
-        toast.error('No test found matching this payment amount!');
-        return;
-      }
-
-      await updatePaymentRequest(req.id, 'approved', profile.firebase_uid, matchedTest.id);
+      await updatePaymentRequest(req.id, 'approved', profile.firebase_uid);
       setPaymentReqs(p => p.map(r => r.id === req.id ? { ...r, status: 'approved' } : r));
       toast.success('Payment approved & access granted!');
       fetchAll();

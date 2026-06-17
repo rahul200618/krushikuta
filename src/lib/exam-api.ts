@@ -17,6 +17,7 @@ async function examApi(action: string, payload: Record<string, unknown> = {}) {
 
 export const getProfile = (userId: string) => examApi('get-profile', { userId });
 export const saveProfile = (userId: string, profile: Record<string, unknown>) => examApi('save-profile', { userId, profile });
+export const submitRegistration = (payload: Record<string, unknown>) => examApi('submit-registration', payload);
 
 export const listMockTests = () => examApi('list-mock-tests');
 export const getMockQuestions = (testId: number) => examApi('get-mock-questions', { testId });

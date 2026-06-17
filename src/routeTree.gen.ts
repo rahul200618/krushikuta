@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ExamCheckoutRouteImport } from './routes/exam-checkout'
 import { Route as ExamRouteImport } from './routes/exam'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ContactRouteImport } from './routes/contact'
@@ -35,6 +36,8 @@ import { Route as ServicesCropLoansSupportRouteImport } from './routes/services/
 import { Route as ServicesAoAaoBankExamRouteImport } from './routes/services/ao-aao-bank-exam'
 import { Route as ServicesAgriConsultingReportsRouteImport } from './routes/services/agri-consulting-reports'
 import { Route as ServicesAgriConsultingDprRouteImport } from './routes/services/agri-consulting-dpr'
+import { Route as ExamPremiumRouteImport } from './routes/exam_.premium'
+import { Route as ExamFreeRouteImport } from './routes/exam_.free'
 import { Route as ExamTestTestIdRouteImport } from './routes/exam-test.$testId'
 import { Route as ExamReportSubmissionIdRouteImport } from './routes/exam-report.$submissionId'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
@@ -52,6 +55,11 @@ const ResultsRoute = ResultsRouteImport.update({
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExamCheckoutRoute = ExamCheckoutRouteImport.update({
+  id: '/exam-checkout',
+  path: '/exam-checkout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ExamRoute = ExamRouteImport.update({
@@ -181,6 +189,16 @@ const ServicesAgriConsultingDprRoute =
     path: '/agri-consulting-dpr',
     getParentRoute: () => ServicesRoute,
   } as any)
+const ExamPremiumRoute = ExamPremiumRouteImport.update({
+  id: '/exam_/premium',
+  path: '/exam/premium',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExamFreeRoute = ExamFreeRouteImport.update({
+  id: '/exam_/free',
+  path: '/exam/free',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExamTestTestIdRoute = ExamTestTestIdRouteImport.update({
   id: '/exam-test/$testId',
   path: '/exam-test/$testId',
@@ -205,12 +223,15 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
   '/exam': typeof ExamRoute
+  '/exam-checkout': typeof ExamCheckoutRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
   '/blog/$slug': typeof BlogSlugRoute
   '/exam-report/$submissionId': typeof ExamReportSubmissionIdRoute
   '/exam-test/$testId': typeof ExamTestTestIdRoute
+  '/exam/free': typeof ExamFreeRoute
+  '/exam/premium': typeof ExamPremiumRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -235,11 +256,14 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
   '/exam': typeof ExamRoute
+  '/exam-checkout': typeof ExamCheckoutRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/exam-report/$submissionId': typeof ExamReportSubmissionIdRoute
   '/exam-test/$testId': typeof ExamTestTestIdRoute
+  '/exam/free': typeof ExamFreeRoute
+  '/exam/premium': typeof ExamPremiumRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -266,12 +290,15 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
   '/exam': typeof ExamRoute
+  '/exam-checkout': typeof ExamCheckoutRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
   '/blog/$slug': typeof BlogSlugRoute
   '/exam-report/$submissionId': typeof ExamReportSubmissionIdRoute
   '/exam-test/$testId': typeof ExamTestTestIdRoute
+  '/exam_/free': typeof ExamFreeRoute
+  '/exam_/premium': typeof ExamPremiumRoute
   '/services/agri-consulting-dpr': typeof ServicesAgriConsultingDprRoute
   '/services/agri-consulting-reports': typeof ServicesAgriConsultingReportsRoute
   '/services/ao-aao-bank-exam': typeof ServicesAoAaoBankExamRoute
@@ -299,12 +326,15 @@ export interface FileRouteTypes {
     | '/contact'
     | '/courses'
     | '/exam'
+    | '/exam-checkout'
     | '/register'
     | '/results'
     | '/services'
     | '/blog/$slug'
     | '/exam-report/$submissionId'
     | '/exam-test/$testId'
+    | '/exam/free'
+    | '/exam/premium'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -329,11 +359,14 @@ export interface FileRouteTypes {
     | '/contact'
     | '/courses'
     | '/exam'
+    | '/exam-checkout'
     | '/register'
     | '/results'
     | '/blog/$slug'
     | '/exam-report/$submissionId'
     | '/exam-test/$testId'
+    | '/exam/free'
+    | '/exam/premium'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -359,12 +392,15 @@ export interface FileRouteTypes {
     | '/contact'
     | '/courses'
     | '/exam'
+    | '/exam-checkout'
     | '/register'
     | '/results'
     | '/services'
     | '/blog/$slug'
     | '/exam-report/$submissionId'
     | '/exam-test/$testId'
+    | '/exam_/free'
+    | '/exam_/premium'
     | '/services/agri-consulting-dpr'
     | '/services/agri-consulting-reports'
     | '/services/ao-aao-bank-exam'
@@ -391,11 +427,14 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   CoursesRoute: typeof CoursesRoute
   ExamRoute: typeof ExamRoute
+  ExamCheckoutRoute: typeof ExamCheckoutRoute
   RegisterRoute: typeof RegisterRoute
   ResultsRoute: typeof ResultsRoute
   ServicesRoute: typeof ServicesRouteWithChildren
   ExamReportSubmissionIdRoute: typeof ExamReportSubmissionIdRoute
   ExamTestTestIdRoute: typeof ExamTestTestIdRoute
+  ExamFreeRoute: typeof ExamFreeRoute
+  ExamPremiumRoute: typeof ExamPremiumRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -419,6 +458,13 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exam-checkout': {
+      id: '/exam-checkout'
+      path: '/exam-checkout'
+      fullPath: '/exam-checkout'
+      preLoaderRoute: typeof ExamCheckoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/exam': {
@@ -582,6 +628,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesAgriConsultingDprRouteImport
       parentRoute: typeof ServicesRoute
     }
+    '/exam_/premium': {
+      id: '/exam_/premium'
+      path: '/exam/premium'
+      fullPath: '/exam/premium'
+      preLoaderRoute: typeof ExamPremiumRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exam_/free': {
+      id: '/exam_/free'
+      path: '/exam/free'
+      fullPath: '/exam/free'
+      preLoaderRoute: typeof ExamFreeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/exam-test/$testId': {
       id: '/exam-test/$testId'
       path: '/exam-test/$testId'
@@ -667,11 +727,14 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   CoursesRoute: CoursesRoute,
   ExamRoute: ExamRoute,
+  ExamCheckoutRoute: ExamCheckoutRoute,
   RegisterRoute: RegisterRoute,
   ResultsRoute: ResultsRoute,
   ServicesRoute: ServicesRouteWithChildren,
   ExamReportSubmissionIdRoute: ExamReportSubmissionIdRoute,
   ExamTestTestIdRoute: ExamTestTestIdRoute,
+  ExamFreeRoute: ExamFreeRoute,
+  ExamPremiumRoute: ExamPremiumRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

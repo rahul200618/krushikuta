@@ -15,6 +15,7 @@ import { CheckCircle2, Circle, Trash2, Plus, FileText, Trophy, Settings, Search,
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ExamEditorPanel } from "@/components/exam/ExamEditorPanel";
 import { AccessManagerPanel } from "@/components/exam/AccessManagerPanel";
+import { PaymentRequestsPanel } from "@/components/exam/PaymentRequestsPanel";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [{ title: "Admin Dashboard — Krishikuta" }],
@@ -423,24 +424,35 @@ function AdminPage() {
 
   return (
     <>
-      <PageHero eyebrow="Admin" title="Dashboard" description="Content management and lead tracking system." />
-      <div className="section-padding container-px mx-auto max-w-6xl">
-        <div className="flex justify-between items-center mb-10">
-          <h2 className="text-3xl font-bold tracking-tight">Management Suite</h2>
-          <Button variant="outline" onClick={handleLogout} className="rounded-full">Log Out</Button>
-        </div>
-        
-        <Tabs defaultValue="leads" className="w-full">
-          <TabsList className="mb-8 p-1 bg-muted/50 rounded-2xl inline-flex w-full overflow-x-auto h-auto scrollbar-hide">
-            <TabsTrigger value="leads" className="rounded-xl py-3 px-6 text-sm font-medium">Registrations</TabsTrigger>
-            <TabsTrigger value="inquiries" className="rounded-xl py-3 px-6 text-sm font-medium">Inquiries</TabsTrigger>
-            <TabsTrigger value="blog" className="rounded-xl py-3 px-6 text-sm font-medium">Blog Posts</TabsTrigger>
-            <TabsTrigger value="results" className="rounded-xl py-3 px-6 text-sm font-medium">Results</TabsTrigger>
-            <TabsTrigger value="testimonials" className="rounded-xl py-3 px-6 text-sm font-medium">Testimonials</TabsTrigger>
-            <TabsTrigger value="settings" className="rounded-xl py-3 px-6 text-sm font-medium">Popups</TabsTrigger>
-            <TabsTrigger value="mock-tests" className="rounded-xl py-3 px-6 text-sm font-medium">Exam Portal</TabsTrigger>
-            <TabsTrigger value="exam-access" className="rounded-xl py-3 px-6 text-sm font-medium">Exam Access</TabsTrigger>
-          </TabsList>
+      <div className="flex min-h-screen bg-[#f4f7f4]">
+        <Tabs defaultValue="leads" className="w-full flex flex-col lg:flex-row">
+          
+          {/* Sidebar */}
+          <div className="w-full lg:w-64 lg:h-screen lg:sticky lg:top-0 shrink-0 flex flex-col bg-white border-r border-[#e0e8e2] p-6 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+            <div className="mb-8">
+              <h2 className="text-xl font-bold tracking-tight mb-1 text-[#1a3820]">Management Suite</h2>
+              <p className="text-xs text-[#5e7a63] uppercase tracking-wider font-semibold">Admin Dashboard</p>
+            </div>
+            
+            <TabsList className="flex lg:flex-col justify-start bg-transparent p-0 w-full h-auto overflow-x-auto lg:overflow-visible gap-2 flex-1">
+              <TabsTrigger value="leads" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Registrations</TabsTrigger>
+              <TabsTrigger value="inquiries" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Inquiries</TabsTrigger>
+              <TabsTrigger value="blog" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Blog Posts</TabsTrigger>
+              <TabsTrigger value="results" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Results</TabsTrigger>
+              <TabsTrigger value="testimonials" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Testimonials</TabsTrigger>
+              <TabsTrigger value="settings" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Popups</TabsTrigger>
+              <TabsTrigger value="mock-tests" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Exam Portal</TabsTrigger>
+              <TabsTrigger value="exam-access" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Exam Access</TabsTrigger>
+              <TabsTrigger value="payments" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Payments & QR</TabsTrigger>
+            </TabsList>
+
+            <div className="mt-auto pt-6">
+              <Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-left py-2.5 px-3 font-medium text-destructive hover:text-destructive hover:bg-destructive/10">Log Out</Button>
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0 w-full p-6 lg:p-10">
 
           <TabsContent value="leads">
             <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -805,6 +817,12 @@ function AdminPage() {
           <TabsContent value="exam-access">
             <AccessManagerPanel />
           </TabsContent>
+
+          <TabsContent value="payments">
+            <PaymentRequestsPanel />
+          </TabsContent>
+
+          </div>
         </Tabs>
       </div>
       

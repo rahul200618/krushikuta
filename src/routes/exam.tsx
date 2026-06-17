@@ -67,30 +67,20 @@ function ExamPage() {
     );
   }
 
-  if (!session) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <h2 className="text-2xl font-bold mb-2">Welcome to Krishikuta Exam Portal</h2>
-        <p className="text-muted-foreground mb-6">Please sign in to access exams and track your performance.</p>
-        <ExamAuthModal open={showAuthModal} onOpenChange={(open) => {
-          setShowAuthModal(open);
-          if (!open && !session) navigate({ to: "/" });
-        }} onSuccess={handleAuthSuccess} />
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-background min-h-screen pb-12">
-      <PageHero eyebrow="Student Portal" title="Exam Dashboard" description="Take exams, track your progress, and prepare for your agriculture exams." />
-      
-      <div className="container-px mx-auto max-w-6xl mt-8">
+    <div className="bg-background min-h-screen pb-12 pt-8">
+      <div className="container-px mx-auto max-w-6xl">
+        {/* Render auth modal globally for the page */}
+        <ExamAuthModal open={showAuthModal} onOpenChange={setShowAuthModal} onSuccess={handleAuthSuccess} />
+        
         <ExamDashboard 
-          userId={session.user.id} 
-          userEmail={session.user.email} 
+          userId={session?.user?.id} 
+          userEmail={session?.user?.email} 
           userProfile={userProfile} 
+          onRequireAuth={() => setShowAuthModal(true)}
         />
       </div>
     </div>
   );
+
 }

@@ -56,14 +56,34 @@ export default async function handler(req, res) {
         return res.status(200).json({ profile: data });
       }
 
+      // ── REGISTRATIONS ───────────────────────────────────────
+      case 'submit-registration': {
+        const { data: regData, error: regError } = await supabase
+          .from('registrations')
+          .insert([payload])
+          .select()
+          .single();
+        if (regError) throw regError;
+        return res.status(200).json({ registration: regData });
+      }
+
       // ── TESTS ────────────────────────────────────────────────
       case 'list-mock-tests': {
         const { data, error } = await supabase
           .from('mock_tests')
-          .select('*')
+          .select('*, mock_questions(count)')
           .order('created_at', { ascending: false });
         if (error) throw error;
-        return res.status(200).json({ tests: data });
+        
+        // Add total_questions property based on the count relation
+        const enriched = data.map(t => ({
+          ...t,
+          total_questions: t.mock_questions?.[0]?.count || 0
+        }));
+        // Clean up the relation object to avoid passing it to frontend unnecessarily
+        enriched.forEach(t => delete t.mock_questions);
+
+        return res.status(200).json({ tests: enriched });
       }
 
       case 'get-mock-questions': {
@@ -155,10 +175,13 @@ export default async function handler(req, res) {
           .order('submitted_at', { ascending: false });
         if (error) throw error;
 
-        const scores = submissions.map(s => s.score).filter(s => s !== null);
+        const percentages = submissions.map(s => {
+          const maxScore = (s.total_questions || 50) * 4;
+          return Math.round((s.score / maxScore) * 100);
+        });
         const totalAttempts = submissions.length;
-        const averageScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-        const bestScore = scores.length ? Math.max(...scores) : 0;
+        const averageScore = percentages.length ? Math.round(percentages.reduce((a, b) => a + b, 0) / percentages.length) : 0;
+        const bestScore = percentages.length ? Math.max(...percentages) : 0;
 
         return res.status(200).json({ totalAttempts, averageScore, bestScore, submissions });
       }
@@ -208,7 +231,15 @@ export default async function handler(req, res) {
 
       // ── ADMIN: ACCESS ────────────────────────────────────────
       case 'grant-access': {
-        const { userId, testId, email, amount = 0, paymentMethod = 'Admin Granted' } = payload;
+        let { userId, testId, email, amount = 0, paymentMethod = 'Admin Granted' } = payload;
+        
+        if (!userId) {
+          const { data: usersData } = await supabase.auth.admin.listUsers();
+          const user = usersData?.users?.find(u => u.email === email);
+          if (!user) throw new Error('No student found with this email. Ask them to sign up first.');
+          userId = user.id;
+        }
+
         const { data, error } = await supabase
           .from('user_purchases')
           .upsert([{ user_id: userId, mock_test_id: testId, amount, status: 'active', payment_method: paymentMethod, granted_by_admin: true, email }], { onConflict: 'user_id,mock_test_id' })
@@ -261,13 +292,34 @@ export default async function handler(req, res) {
 
       case 'list-student-profiles': {
         const { search } = payload;
-        let query = supabase.from('student_profiles').select('*').order('created_at', { ascending: false });
+        
+        // Get auth users (source of truth)
+        const { data: authData, error: authErr } = await supabase.auth.admin.listUsers();
+        if (authErr) throw authErr;
+        const authUsers = authData?.users || [];
+        
+        // Get extra profile details
+        const { data: profileData } = await supabase.from('student_profiles').select('*').order('created_at', { ascending: false });
+        const profiles = profileData || [];
+        
+        const profileMap = {};
+        profiles.forEach(p => profileMap[p.firebase_uid] = p);
+        
+        let merged = authUsers.map(u => ({
+           firebase_uid: u.id,
+           email: u.email,
+           name: profileMap[u.id]?.name || '-',
+           mobile: profileMap[u.id]?.mobile || '-',
+           college: profileMap[u.id]?.college || '-',
+           created_at: u.created_at
+        }));
+        
         if (search) {
-          query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,mobile.ilike.%${search}%`);
+           const s = search.toLowerCase();
+           merged = merged.filter(m => (m.email && m.email.toLowerCase().includes(s)) || (m.name && m.name.toLowerCase().includes(s)) || (m.mobile && m.mobile.toLowerCase().includes(s)));
         }
-        const { data, error } = await query;
-        if (error) throw error;
-        return res.status(200).json({ profiles: data });
+
+        return res.status(200).json({ profiles: merged });
       }
 
       // ── PAYMENTS ─────────────────────────────────────────────
@@ -302,11 +354,26 @@ export default async function handler(req, res) {
         if (prErr) throw prErr;
 
         // Auto-grant access on approve
-        if (status === 'approved' && userId && testId) {
-          await supabase.from('user_purchases').upsert([{
-            user_id: userId, mock_test_id: testId, amount: pr.amount,
-            status: 'active', payment_method: 'Manual Pay', granted_by_admin: true, email: pr.user_email
-          }], { onConflict: 'user_id,mock_test_id' });
+        if (status === 'approved' && pr.user_email) {
+          let targetUserId = userId;
+          
+          if (!targetUserId) {
+            const { data: profile } = await supabase.from('student_profiles').select('firebase_uid').eq('email', pr.user_email).single();
+            if (profile) targetUserId = profile.firebase_uid;
+          }
+          
+          if (!targetUserId) {
+            const { data: authData } = await supabase.auth.admin.listUsers();
+            const user = authData?.users?.find(u => u.email === pr.user_email);
+            if (user) targetUserId = user.id;
+          }
+
+          if (targetUserId) {
+            await supabase.from('user_purchases').upsert([{
+              user_id: targetUserId, mock_test_id: testId || -1, amount: pr.amount,
+              status: 'active', payment_method: 'UPI Verified', granted_by_admin: true, email: pr.user_email
+            }], { onConflict: 'user_id,mock_test_id' });
+          }
         }
         return res.status(200).json({ request: pr });
       }
