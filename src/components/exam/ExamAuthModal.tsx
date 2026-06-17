@@ -32,31 +32,41 @@ export function ExamAuthModal({ open, onOpenChange, onSuccess }: ExamAuthModalPr
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
-    setLoading(false);
-    if (error) { setError(error.message); return; }
-    onSuccess();
-    onOpenChange(false);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+      if (error) { setError(error.message); return; }
+      onSuccess();
+      onOpenChange(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to connect. Please check your internet connection or Supabase configuration.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { data, error } = await supabase.auth.signUp({ email: signupData.email, password: signupData.password });
-    if (error) { setError(error.message); setLoading(false); return; }
+    try {
+      const { data, error } = await supabase.auth.signUp({ email: signupData.email, password: signupData.password });
+      if (error) { setError(error.message); return; }
 
-    const uid = data.user?.id;
-    if (uid) {
-      await saveProfile(uid, {
-        name: signupData.name, email: signupData.email,
-        mobile: signupData.mobile, college: signupData.college,
-        district: signupData.district,
-      }).catch(() => {});
+      const uid = data.user?.id;
+      if (uid) {
+        await saveProfile(uid, {
+          name: signupData.name, email: signupData.email,
+          mobile: signupData.mobile, college: signupData.college,
+          district: signupData.district,
+        }).catch(() => {});
+      }
+      onSuccess();
+      onOpenChange(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to connect. Please check your internet connection or Supabase configuration.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    onSuccess();
-    onOpenChange(false);
   };
 
   return (
