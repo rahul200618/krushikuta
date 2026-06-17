@@ -73,9 +73,7 @@ export function Navbar() {
           >
             <Phone className="w-4 h-4" /> +91 9108652322
           </a>
-          <Button asChild variant="default" className="gradient-primary text-primary-foreground shadow-soft hover:opacity-90">
-            <Link to="/contact">Book Consultation</Link>
-          </Button>
+
         </div>
 
         <button
@@ -102,9 +100,7 @@ export function Navbar() {
                 {l.label}
               </Link>
             ))}
-            <Button asChild className="mt-2 gradient-primary text-primary-foreground">
-              <Link to="/contact" onClick={() => setOpen(false)}>Book Consultation</Link>
-            </Button>
+
           </div>
         </div>
       )}

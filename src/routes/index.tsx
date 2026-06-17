@@ -59,12 +59,6 @@ function Index() {
               >
                 Explore Agriculture Services
               </Button>
-              <Button asChild size="lg" className="h-14 px-8 text-lg font-bold bg-amber-500 hover:bg-amber-600 text-white border-0 shadow-lg transition-all hover:scale-105">
-                <Link to="/exam">Access Exam Portal</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm">
-                <Link to="/about">Learn More</Link>
-              </Button>
             </div>
           </div>
         </div>
