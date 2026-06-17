@@ -153,45 +153,6 @@ function PremiumSchedulePage() {
 
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         
-        {/* Banner */}
-        {!hasAccess && (
-          <div 
-            onClick={handleUnlockClick}
-            className="bg-gradient-to-br from-amber-50 via-white to-amber-50/30 rounded-2xl p-6 md:p-8 border border-amber-200/60 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm relative overflow-hidden cursor-pointer hover:shadow-md hover:border-amber-300 transition-all duration-300 group"
-          >
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-400 to-amber-600" />
-            <div className="absolute right-0 bottom-0 w-32 h-32 bg-amber-200/10 rounded-full blur-2xl -mr-8 -mb-8 pointer-events-none group-hover:bg-amber-200/25 transition-all duration-700" />
-            
-            <div className="space-y-3 relative z-10">
-              <div className="inline-flex items-center gap-1.5 bg-amber-100/70 border border-amber-200 text-amber-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                Special Discounted Offer
-              </div>
-              <h1 className="text-2xl md:text-3xl font-serif text-slate-800 leading-tight font-extrabold">
-                Get All-Access Premium Bundle
-              </h1>
-              <p className="text-sm text-slate-600 max-w-lg">
-                Unlock all 36 premium mock tests, in-depth subject coverage, detailed answer reviews, and comprehensive analytics designed by agricultural experts.
-              </p>
-            </div>
-
-            <div className="flex flex-col items-center md:items-end gap-3 shrink-0 relative z-10">
-              <div className="text-center md:text-right">
-                <span className="text-sm font-semibold text-slate-400 line-through mr-2">₹5,000</span>
-                <span className="text-3xl md:text-4xl font-black text-amber-600 tracking-tight">₹3,000</span>
-                <div className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100 mt-1 inline-block">
-                  Save 40% (₹2,000)
-                </div>
-              </div>
-              <Button 
-                onClick={(e) => { e.stopPropagation(); handleUnlockClick(); }} 
-                className="bg-amber-600 hover:bg-amber-700 text-white shadow-md hover:shadow-lg transition-all rounded-full px-8 py-5 text-sm font-bold whitespace-nowrap group-hover:scale-105 duration-300"
-              >
-                Unlock Premium Access
-              </Button>
-            </div>
-          </div>
-        )}
 
         {/* Papers Release Schedule directly rendered */}
         <Card className="p-6 border border-slate-200 shadow-sm bg-white rounded-2xl space-y-4">
