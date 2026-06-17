@@ -22,27 +22,45 @@ function ExamPage() {
   const [userProfile, setUserProfile] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      if (data.session) {
-        fetchProfile(data.session.user.id);
+    let active = true;
+
+    const init = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!active) return;
+        setSession(data.session);
+        if (data.session) {
+          await fetchProfile(data.session.user.id);
+        } else {
+          setShowAuthModal(true);
+          setLoadingAuth(false);
+        }
+      } catch (err) {
+        console.error("Failed to initialize session:", err);
+        if (active) {
+          setShowAuthModal(true);
+          setLoadingAuth(false);
+        }
+      }
+    };
+    init();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!active) return;
+      setSession(session);
+      if (session) {
+        setShowAuthModal(false);
+        await fetchProfile(session.user.id);
       } else {
         setShowAuthModal(true);
         setLoadingAuth(false);
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) {
-        setShowAuthModal(false);
-        fetchProfile(session.user.id);
-      } else {
-        setShowAuthModal(true);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (uid: string) => {
