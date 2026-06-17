@@ -8,7 +8,15 @@ import { Progress } from '@/components/ui/progress';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
-import { Trophy, CheckCircle2, XCircle, Printer, ArrowLeft, TrendingUp } from 'lucide-react';
+import { Trophy, CheckCircle2, XCircle, Printer, ArrowLeft, TrendingUp, Clock } from 'lucide-react';
+
+function formatDuration(seconds: number): string {
+  if (!seconds) return 'N/A';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m === 0) return `${s}s`;
+  return `${m}m ${s}s`;
+}
 
 interface Question {
   id: number; question_text: string; options: string[];
@@ -64,7 +72,7 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
     return (
       <div className="text-center py-20">
         <p className="text-muted-foreground">Report not found.</p>
-        <Link to="/exam" className="mt-4 inline-block">
+        <Link to="/ao/aao" className="mt-4 inline-block">
           <Button variant="outline"><ArrowLeft className="w-4 h-4 mr-2" />Back to Dashboard</Button>
         </Link>
       </div>
@@ -72,16 +80,19 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
   }
 
   const answers = submission.answers || {};
-  const maxScore = questions.reduce((sum, q) => sum + (q.marks || 4), 0);
+  // Filter out meta keys like _time_taken for calculating skipped count
   const correctCount = questions.filter(q => {
     const selected = answers[q.id];
     return selected !== undefined && Number(selected) === q.correct_option_index;
   }).length;
   const wrongCount = questions.filter(q => answers[q.id] !== undefined && Number(answers[q.id]) !== q.correct_option_index).length;
   const skippedCount = questions.filter(q => answers[q.id] === undefined).length;
-  const pct = maxScore > 0 ? Math.round((submission.score / maxScore) * 100) : 0;
 
-  // Subject-wise analysis
+  const isScaled = answers._time_taken !== undefined;
+  const score = isScaled ? submission.score / 100 : submission.score;
+  const maxScore = isScaled ? questions.length * 3 : questions.reduce((sum, q) => sum + (q.marks || 4), 0);
+  const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+
   const topicMap: Record<string, { correct: number; total: number }> = {};
   questions.forEach(q => {
     const topic = q.topic || 'General';
@@ -105,75 +116,110 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
         <p className="text-sm text-gray-500">Submission #{submissionId} • {new Date(submission.submitted_at).toLocaleString()}</p>
       </div>
 
-      {/* Score hero */}
-      <Card className="p-8 text-center space-y-4 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent print:border-gray-200">
-        <div className="flex justify-center">
-          <div className="w-24 h-24 rounded-full flex items-center justify-center border-4 border-primary/30 bg-primary/10 print:border-gray-300">
-            <Trophy className="w-10 h-10" style={{ color: scoreColor }} />
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Card 1: Total Scored */}
+        <Card className="p-6 border-l-4 border-l-emerald-500 shadow-sm flex flex-col justify-between h-36 bg-white print:border-gray-200">
+          <div className="flex justify-between items-start">
+            <span className="text-sm font-semibold text-slate-500">Total Scored</span>
+            <Trophy className="w-5 h-5 text-emerald-500" />
           </div>
-        </div>
-        <div>
-          <p className="text-5xl font-extrabold" style={{ color: scoreColor }}>{submission.score}</p>
-          <p className="text-muted-foreground text-sm mt-1">out of {maxScore} marks ({pct}%)</p>
-        </div>
-
-        <div className="flex justify-center gap-6 pt-4 flex-wrap">
-          {[
-            { label: 'Correct', value: correctCount, icon: CheckCircle2, color: 'text-green-600' },
-            { label: 'Wrong', value: wrongCount, icon: XCircle, color: 'text-red-500' },
-            { label: 'Skipped', value: skippedCount, icon: TrendingUp, color: 'text-amber-500' },
-            { label: 'Total', value: questions.length, icon: Trophy, color: 'text-primary' },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="flex flex-col items-center gap-1">
-              <Icon className={`w-5 h-5 ${color}`} />
-              <span className={`text-xl font-bold ${color}`}>{value}</span>
-              <span className="text-xs text-muted-foreground">{label}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="max-w-sm mx-auto">
-          <Progress value={pct} className="h-3 rounded-full" />
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-center gap-3 pt-2 print:hidden">
-          <Link to="/exam"><Button variant="outline"><ArrowLeft className="w-4 h-4 mr-2" />Dashboard</Button></Link>
-          <Button variant="outline" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" />Print / Save PDF</Button>
-        </div>
-      </Card>
-
-      {/* Subject-wise breakdown */}
-      {topicData.length > 0 && (
-        <Card className="p-6 print:border-gray-200">
-          <h2 className="font-bold text-lg mb-4">Subject-Wise Performance</h2>
-          <ResponsiveContainer width="100%" height={200} className="print:hidden">
-            <BarChart data={topicData} layout="vertical" margin={{ left: 20 }}>
-              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={100} />
-              <Tooltip formatter={(v: number) => [`${v}%`, 'Score']} />
-              <Bar dataKey="pct" radius={[0, 4, 4, 0]}>
-                {topicData.map((entry, i) => (
-                  <Cell key={i} fill={entry.pct >= 60 ? '#16a34a' : entry.pct >= 40 ? '#d97706' : '#dc2626'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          {/* Table for print */}
-          <div className="mt-4 space-y-2">
-            {topicData.map(t => (
-              <div key={t.name} className="flex items-center gap-3">
-                <span className="text-sm font-medium w-36 shrink-0 truncate">{t.name}</span>
-                <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${t.pct}%`, backgroundColor: t.pct >= 60 ? '#16a34a' : t.pct >= 40 ? '#d97706' : '#dc2626' }} />
-                </div>
-                <span className="text-sm font-bold w-14 text-right">{t.correct}/{t.total}</span>
-                <span className="text-xs text-muted-foreground w-10 text-right">{t.pct}%</span>
-              </div>
-            ))}
+          <div>
+            <h3 className="text-3xl font-extrabold text-emerald-600">
+              {score % 1 === 0 ? score.toString() : score.toFixed(2)}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              out of {maxScore} marks ({pct}%)
+            </p>
           </div>
         </Card>
-      )}
+
+        {/* Card 2: Total Negatived */}
+        <Card className="p-6 border-l-4 border-l-rose-500 shadow-sm flex flex-col justify-between h-36 bg-white print:border-gray-200">
+          <div className="flex justify-between items-start">
+            <span className="text-sm font-semibold text-slate-500">Total Negatived</span>
+            <XCircle className="w-5 h-5 text-rose-500" />
+          </div>
+          <div>
+            <h3 className="text-3xl font-extrabold text-rose-600">
+              {isScaled ? `-${(wrongCount * 0.75).toFixed(2)}` : '0'}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              from {wrongCount} incorrect answers
+            </p>
+          </div>
+        </Card>
+
+        {/* Card 3: Time Taken */}
+        <Card className="p-6 border-l-4 border-l-blue-500 shadow-sm flex flex-col justify-between h-36 bg-white print:border-gray-200">
+          <div className="flex justify-between items-start">
+            <span className="text-sm font-semibold text-slate-500">Time Taken</span>
+            <Clock className="w-5 h-5 text-blue-500" />
+          </div>
+          <div>
+            <h3 className="text-3xl font-extrabold text-blue-600">
+              {formatDuration(answers._time_taken as number)}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              for the entire paper
+            </p>
+          </div>
+        </Card>
+
+        {/* Card 4: Correct Answers */}
+        <Card className="p-6 border-l-4 border-l-green-500 shadow-sm flex flex-col justify-between h-36 bg-white print:border-gray-200">
+          <div className="flex justify-between items-start">
+            <span className="text-sm font-semibold text-slate-500">Correct Answers</span>
+            <CheckCircle2 className="w-5 h-5 text-green-500" />
+          </div>
+          <div>
+            <h3 className="text-3xl font-extrabold text-green-600">
+              {correctCount}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              out of {questions.length} questions
+            </p>
+          </div>
+        </Card>
+
+        {/* Card 5: Wrong Answers */}
+        <Card className="p-6 border-l-4 border-l-red-500 shadow-sm flex flex-col justify-between h-36 bg-white print:border-gray-200">
+          <div className="flex justify-between items-start">
+            <span className="text-sm font-semibold text-slate-500">Wrong Answers</span>
+            <XCircle className="w-5 h-5 text-red-500" />
+          </div>
+          <div>
+            <h3 className="text-3xl font-extrabold text-red-600">
+              {wrongCount}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              out of {questions.length} questions
+            </p>
+          </div>
+        </Card>
+
+        {/* Card 6: Skipped Questions */}
+        <Card className="p-6 border-l-4 border-l-amber-500 shadow-sm flex flex-col justify-between h-36 bg-white print:border-gray-200">
+          <div className="flex justify-between items-start">
+            <span className="text-sm font-semibold text-slate-500">Skipped Questions</span>
+            <TrendingUp className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <h3 className="text-3xl font-extrabold text-amber-600">
+              {skippedCount}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              out of {questions.length} questions
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Actions */}
+      <div className="flex justify-center gap-3 pt-4 print:hidden">
+        <Link to="/ao/aao"><Button variant="outline"><ArrowLeft className="w-4 h-4 mr-2" />Dashboard</Button></Link>
+        <Button variant="outline" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" />Print / Save PDF</Button>
+      </div>
 
       {/* Detailed answer key */}
       <Card className="p-0 overflow-hidden print:border-gray-200">

@@ -6,7 +6,7 @@ import { getProfile } from "@/lib/exam-api";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/exam-test/$testId")({
+export const Route = createFileRoute("/ao/aao_/test/$testId")({
   component: ActiveTestPage,
   head: () => ({
     meta: [{ title: "Active Exam — Krishikuta" }],
@@ -25,7 +25,7 @@ function ActiveTestPage() {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         toast.error("Please sign in to take the test");
-        navigate({ to: "/exam" });
+        navigate({ to: "/ao/aao" });
         return;
       }
       setSession(data.session);

@@ -15,6 +15,7 @@ async function examApi(action: string, payload: Record<string, unknown> = {}) {
   return res.json();
 }
 
+export const checkMobile = (mobile: string) => examApi('check-mobile', { mobile });
 export const getProfile = (userId: string) => examApi('get-profile', { userId });
 export const saveProfile = (userId: string, profile: Record<string, unknown>) => examApi('save-profile', { userId, profile });
 export const submitRegistration = (payload: Record<string, unknown>) => examApi('submit-registration', payload);

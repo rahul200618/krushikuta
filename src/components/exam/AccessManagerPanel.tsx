@@ -22,7 +22,7 @@ interface PaymentRequest {
 }
 
 interface MockTest { id: number; title: string; category: string; price: number; }
-interface StudentProfile { firebase_uid: string; name: string; email: string; mobile: string; college: string; created_at: string; }
+interface StudentProfile { firebase_uid: string; name: string; email: string; mobile: string; college: string; created_at: string; category?: string; }
 
 export function AccessManagerPanel() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -55,6 +55,17 @@ export function AccessManagerPanel() {
       setPaymentReqs(payRes.requests || []);
       setTests(testsRes.tests || []);
       setStudents(stuRes.profiles || []);
+
+      const warnings = [
+        purchaseRes.error && `Purchases: ${purchaseRes.error}`,
+        payRes.error && `Payment Requests: ${payRes.error}`,
+        testsRes.error && `Mock Tests: ${testsRes.error}`,
+        stuRes.error && `Student Profiles: ${stuRes.error}`
+      ].filter(Boolean);
+
+      if (warnings.length > 0) {
+        toast.warning('Warning: Some data tables could not be loaded. Please check your Supabase schema: ' + warnings.join(', '));
+      }
     } catch { toast.error('Failed to load access data'); } finally {
       setLoading(false);
     }
@@ -315,7 +326,14 @@ export function AccessManagerPanel() {
                     <tr key={s.firebase_uid} className="border-b hover:bg-muted/20 transition-colors">
                       <td className="px-5 py-3 font-semibold">{s.name}</td>
                       <td className="px-5 py-3"><div>{s.mobile || '—'}</div><div className="text-xs text-muted-foreground">{s.email}</div></td>
-                      <td className="px-5 py-3 text-xs">{s.college || '—'}</td>
+                      <td className="px-5 py-3 text-xs">
+                        <div>{s.college || '—'}</div>
+                        {s.category && (
+                          <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                            {s.category}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-xs">{new Date(s.created_at).toLocaleDateString()}</td>
                       <td className="px-5 py-3 font-mono text-[10px] text-muted-foreground truncate max-w-[120px]" title={s.firebase_uid}>{s.firebase_uid}</td>
                     </tr>

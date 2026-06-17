@@ -34,11 +34,12 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [visitedSet, setVisitedSet] = useState<Set<number>>(new Set());
-  const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
+  const [timeElapsed, setTimeElapsed] = useState(0);
   const [submissionId, setSubmissionId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -68,14 +69,14 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
           try {
             const saved = JSON.parse(savedRaw);
             setAnswers(saved.answers || {});
-            setTimeLeft(saved.timeLeft ?? durationMinutes * 60);
+            setTimeElapsed(saved.timeElapsed ?? 0);
             setSubmissionId(saved.submissionId ?? startRes.submissionId);
             setVisitedSet(new Set(Object.keys(saved.answers || {}).map(Number)));
             return;
           } catch { /* fresh start */ }
         }
         setSubmissionId(startRes.submissionId);
-        setTimeLeft(durationMinutes * 60);
+        setTimeElapsed(0);
       } catch { /* silent */ } finally {
         setLoading(false);
       }
@@ -83,18 +84,11 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
     init();
   }, [testId, userId]);
 
-  // Timer countdown
+  // Timer count-up (no time limit)
   useEffect(() => {
     if (loading || submitting) return;
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimeElapsed(prev => prev + 1);
     }, 1000);
     return () => clearInterval(timerRef.current!);
   }, [loading, submitting]);
@@ -103,8 +97,8 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
   useEffect(() => {
     if (!submissionId || loading) return;
     const key = getStorageKey(userId, testId);
-    localStorage.setItem(key, JSON.stringify({ answers, timeLeft, submissionId }));
-  }, [answers, timeLeft, submissionId]);
+    localStorage.setItem(key, JSON.stringify({ answers, timeElapsed, submissionId }));
+  }, [answers, timeElapsed, submissionId]);
 
   const handleAutoSubmit = useCallback(async () => {
     if (hasSubmitted.current) return;
@@ -117,8 +111,9 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
     setSubmitting(true);
     try {
       localStorage.removeItem(getStorageKey(userId, testId));
-      await submitTest(submissionId, testId, answers);
-      navigate({ to: `/exam-report/${submissionId}` as any });
+      const answersWithTime = { ...answers, _time_taken: timeElapsed };
+      await submitTest(submissionId, testId, answersWithTime as any);
+      navigate({ to: `/ao/aao/report/${submissionId}` as any });
     } catch { setSubmitting(false); }
   };
 
@@ -170,7 +165,6 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
   const answered = Object.keys(answers).length;
   const progress = questions.length ? (answered / questions.length) * 100 : 0;
   const currentQ = questions[currentIdx];
-  const timerDanger = timeLeft < 300;
 
   if (loading) {
     return (
@@ -207,7 +201,12 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
       {/* Top bar */}
       <header className="sticky top-0 z-30 bg-slate-100 border-b border-border shadow-sm">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Button variant="ghost" size="sm" onClick={() => setConfirmExit(true)} className="h-9 px-2 text-muted-foreground hover:text-foreground">
+              <ChevronLeft className="w-4 h-4 mr-1 shrink-0" />
+              <span className="hidden md:inline">Back to Dashboard</span>
+              <span className="md:hidden">Back</span>
+            </Button>
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0">
               <Clock className="w-4 h-4 text-primary-foreground" />
             </div>
@@ -220,11 +219,6 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
           <div className="flex-1 max-w-xs">
             <Progress value={progress} className="h-2" />
             <p className="text-[10px] text-muted-foreground mt-0.5 text-center">{answered} answered</p>
-          </div>
-
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border font-mono font-bold text-sm ${timerDanger ? 'bg-red-50 border-red-300 text-red-600 animate-pulse' : 'bg-muted border-border'}`}>
-            <Clock className="w-3.5 h-3.5" />
-            {formatTime(timeLeft)}
           </div>
 
           <Button size="sm" className="gradient-primary shrink-0" onClick={() => setConfirmSubmit(true)} disabled={submitting}>
@@ -345,6 +339,32 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
               className="gradient-primary"
             >
               <Send className="w-4 h-4 mr-2" /> Submit Now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Exit confirmation dialog */}
+      <AlertDialog open={confirmExit} onOpenChange={setConfirmExit}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Exit Exam?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to exit the exam? Your progress is autosaved automatically, and you can resume it later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Resume Exam</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen?.().catch(() => {});
+                }
+                navigate({ to: '/ao/aao' as any });
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Exit Exam
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

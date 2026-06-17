@@ -140,13 +140,16 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const routerState = useRouterState();
   const isAdminPage = routerState.location.pathname.startsWith('/admin');
-  const isExamPage = routerState.location.pathname.startsWith('/exam');
+  const isExamPage = routerState.location.pathname.startsWith('/ao/aao');
+  const isAuthPage = routerState.location.pathname === '/ao/aao/auth';
+  const isExamDashboard = routerState.location.pathname === '/ao/aao' || routerState.location.pathname === '/ao/aao/';
+  const isExamSubPage = isExamPage && !isExamDashboard && !isAuthPage;
 
   return (
     <QueryClientProvider client={queryClient}>
       <Toaster position="top-center" expand={false} richColors />
-      {!isAdminPage && <Navbar isExamPage={isExamPage} />}
-      <main className={!isAdminPage ? "pt-16 md:pt-20" : ""}>
+      {!isAdminPage && !isAuthPage && !isExamSubPage && <Navbar isExamPage={isExamPage} />}
+      <main className={(!isAdminPage && !isAuthPage && !isExamSubPage) ? "pt-16 md:pt-20" : ""}>
         <Outlet />
       </main>
       {!isAdminPage && !isExamPage && <Footer />}

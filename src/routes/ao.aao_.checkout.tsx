@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Loader2, CheckCircle2, Lock, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const Route = createFileRoute('/exam-checkout')({
+export const Route = createFileRoute('/ao/aao_/checkout')({
   component: ExamCheckoutPage,
   head: () => ({ meta: [{ title: 'Checkout — Krishikuta' }] }),
 });
@@ -29,7 +29,7 @@ function ExamCheckoutPage() {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         toast.error('Please sign in first');
-        navigate({ to: '/exam' });
+        navigate({ to: '/ao/aao' });
         return;
       }
       setSession(data.session);
@@ -79,7 +79,7 @@ function ExamCheckoutPage() {
           (payload) => {
             if (payload.new.status === 'approved') {
               toast.success('Your payment was approved! Redirecting to dashboard...');
-              setTimeout(() => navigate({ to: '/exam' }), 2000);
+              setTimeout(() => navigate({ to: '/ao/aao' }), 2000);
             } else if (payload.new.status === 'declined') {
               toast.error('Your payment was declined. Please verify your UTR and try again.');
               setDone(false);
@@ -100,7 +100,7 @@ function ExamCheckoutPage() {
   return (
     <div className="bg-muted/30 min-h-screen py-12">
       <div className="container-px mx-auto max-w-5xl">
-        <Link to="/exam" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
+        <Link to="/ao/aao" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Dashboard
         </Link>
         
@@ -148,7 +148,7 @@ function ExamCheckoutPage() {
                 </div>
                 <h3 className="text-2xl font-bold">Request Submitted!</h3>
                 <p className="text-muted-foreground max-w-sm mx-auto">We've received your UTR number. Your premium access will be unlocked automatically as soon as the admin verifies your payment.</p>
-                <Link to="/exam" className="inline-block pt-4">
+                <Link to="/ao/aao" className="inline-block pt-4">
                   <Button variant="outline">Return to Dashboard</Button>
                 </Link>
               </div>

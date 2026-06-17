@@ -16,8 +16,11 @@ export function PaymentRequestsPanel() {
   const fetchRequests = async () => {
     try {
       const { listPaymentRequests } = await import('@/lib/exam-api');
-      const { requests } = await listPaymentRequests();
-      setRequests((requests || []).filter((r: any) => r.status === 'pending'));
+      const res = await listPaymentRequests();
+      setRequests((res.requests || []).filter((r: any) => r.status === 'pending'));
+      if (res.error) {
+        toast.warning('Failed to load pending payments: ' + res.error);
+      }
     } catch (err) {
       console.error(err);
     } finally {

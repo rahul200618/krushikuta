@@ -6,7 +6,7 @@ import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/exam-report/$submissionId")({
+export const Route = createFileRoute("/ao/aao_/report/$submissionId")({
   component: ExamReportPage,
   head: () => ({
     meta: [{ title: "Score Report — Krishikuta" }],
@@ -24,7 +24,7 @@ function ExamReportPage() {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         toast.error("Please sign in to view reports");
-        navigate({ to: "/exam" });
+        navigate({ to: "/ao/aao" });
         return;
       }
       setSession(data.session);
@@ -53,7 +53,7 @@ function ExamReportPage() {
             <h1 className="text-xl md:text-2xl font-bold mt-0.5">Score Report</h1>
           </div>
           <Button asChild variant="outline" size="sm" className="bg-white/10 text-white border-white/20 hover:bg-white/20 h-8 text-xs">
-            <Link to="/exam">
+            <Link to="/ao/aao">
               <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Dashboard
             </Link>
           </Button>
