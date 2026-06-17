@@ -49,13 +49,19 @@ function ExamCheckoutPage() {
     e.preventDefault();
     if (!utr.trim()) return toast.error('Please enter the UTR / Transaction ID');
     
+    const email = session?.user?.email;
+    if (!email) {
+      toast.error('Your user session is missing an email address. Please sign in again.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await submitPaymentRequest(session.user.email, utr, 3000);
+      await submitPaymentRequest(email, utr.trim(), 3000);
       setDone(true);
       toast.success('Payment details submitted successfully!');
-    } catch (err) {
-      toast.error('Failed to submit request. Please try again.');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to submit request. Please try again.');
     } finally {
       setSubmitting(false);
     }

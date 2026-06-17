@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceKey) {
+  console.warn('[exam-api] WARNING: SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_SERVICE_ROLE_KEY) is not defined in environment variables. Falling back to ANON_KEY. Admin features and RLS bypass will fail.');
+}
+
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
+  serviceKey || process.env.VITE_SUPABASE_ANON_KEY || ''
 );
 
 export default async function handler(req, res) {
