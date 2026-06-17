@@ -33,6 +33,75 @@ serve({
       return new Response(file, { headers: { 'Content-Type': contentType } });
     }
     
+    // Intercept requests to /api/exam for static/Node.js hosting environments (like Hostinger)
+    if (url.pathname === '/api/exam') {
+      try {
+        if (request.method === 'OPTIONS') {
+          return new Response(null, {
+            status: 200,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type'
+            }
+          });
+        }
+
+        const bodyText = await request.text();
+        let body = {};
+        try {
+          body = bodyText ? JSON.parse(bodyText) : {};
+        } catch {}
+
+        const mockReq = {
+          method: request.method,
+          body: body,
+          headers: Object.fromEntries(request.headers.entries())
+        };
+
+        let resStatus = 200;
+        let resHeaders = {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        };
+        let resBody = '';
+
+        const mockRes = {
+          status(code) {
+            resStatus = code;
+            return this;
+          },
+          json(data) {
+            resBody = JSON.stringify(data);
+            return this;
+          },
+          setHeader(name, value) {
+            resHeaders[name] = value;
+          },
+          end(data) {
+            if (data) resBody = data;
+            return this;
+          }
+        };
+
+        const { default: examHandler } = await import('./api/exam.js');
+        await examHandler(mockReq, mockRes);
+
+        return new Response(resBody, {
+          status: resStatus,
+          headers: resHeaders
+        });
+      } catch (err) {
+        console.error("Error in server.js /api/exam handler:", err);
+        return new Response(JSON.stringify({ error: err.message || 'Internal Server Error' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // Otherwise, hand over to the SSR app!
     return app.default.fetch(request, env, ctx);
   },
