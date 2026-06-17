@@ -205,7 +205,7 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
       )}
 
       {/* Top bar */}
-      <header className="sticky top-0 z-30 bg-card border-b border-border shadow-sm">
+      <header className="sticky top-0 z-30 bg-slate-100 border-b border-border shadow-sm">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0">

@@ -59,6 +59,9 @@ function Index() {
               >
                 Explore Agriculture Services
               </Button>
+              <Button asChild size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold bg-white/10 text-white border-white/20 hover:bg-white/20 backdrop-blur-sm">
+                <Link to="/about">Learn More</Link>
+              </Button>
             </div>
           </div>
         </div>

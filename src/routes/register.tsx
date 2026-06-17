@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Send, Loader2 } from "lucide-react";
 import { services } from "@/lib/site-data";
 import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { submitRegistration } from "@/lib/exam-api";
 
 export const Route = createFileRoute("/register")({
   validateSearch: (search: Record<string, unknown>) => {
@@ -42,17 +42,16 @@ function RegisterPage() {
       comments: formData.get("comments")
     };
 
-    const { error } = await supabase.from('registrations').insert([data]);
-    
-    setIsSubmitting(false);
-
-    if (error) {
-      console.error(error);
-      alert("Something went wrong. Please check your connection and try again.");
-    } else {
+    try {
+      await submitRegistration(data);
       setSuccess(true);
       e.currentTarget.reset();
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Please check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
