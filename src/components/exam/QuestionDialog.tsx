@@ -33,12 +33,12 @@ export function QuestionDialog({ open, onOpenChange, testId, editingQuestion, on
         question_text: (editingQuestion.question_text as string) || '',
         optA: opts[0] || '', optB: opts[1] || '', optC: opts[2] || '', optD: opts[3] || '',
         correct_option_index: String(editingQuestion.correct_option_index ?? '0'),
-        marks: String(editingQuestion.marks ?? '4'),
+        marks: String(editingQuestion.marks ?? '3'),
         topic: (editingQuestion.topic as string) || 'General',
         image_url: (editingQuestion.image_url as string) || '',
       };
     }
-    return { question_text: '', optA: '', optB: '', optC: '', optD: '', correct_option_index: '0', marks: '4', topic: 'General', image_url: '' };
+    return { question_text: '', optA: '', optB: '', optC: '', optD: '', correct_option_index: '0', marks: '3', topic: 'General', image_url: '' };
   });
 
   const set = (k: string, v: string) => setFormData(p => ({ ...p, [k]: v }));
@@ -64,7 +64,7 @@ export function QuestionDialog({ open, onOpenChange, testId, editingQuestion, on
         question_text: formData.question_text,
         options: [formData.optA, formData.optB, formData.optC, formData.optD],
         correct_option_index: parseInt(formData.correct_option_index),
-        marks: parseInt(formData.marks) || 4,
+        marks: parseInt(formData.marks) || 3,
         topic: formData.topic,
         image_url: formData.image_url || null,
       };

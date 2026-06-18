@@ -90,7 +90,7 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
 
   const isScaled = answers._time_taken !== undefined;
   const score = isScaled ? submission.score / 100 : submission.score;
-  const maxScore = isScaled ? questions.length * 3 : questions.reduce((sum, q) => sum + (q.marks || 4), 0);
+  const maxScore = isScaled ? questions.length * 3 : questions.reduce((sum, q) => sum + (q.marks === 4 || !q.marks ? 3 : q.marks), 0);
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
 
   const topicMap: Record<string, { correct: number; total: number }> = {};
@@ -261,7 +261,7 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
                       <span>Correct: <strong className="text-green-700">{String.fromCharCode(65 + q.correct_option_index)}</strong></span>
                       {!isSkipped && <span>Your answer: <strong className={isCorrect ? 'text-green-700' : 'text-red-600'}>{String.fromCharCode(65 + Number(selected))}</strong></span>}
                       {isSkipped && <span className="text-amber-600">Skipped</span>}
-                      <span>Marks: <strong>{q.marks}</strong></span>
+                      <span>Marks: <strong>{q.marks === 4 || !q.marks ? 3 : q.marks}</strong></span>
                       <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary">{q.topic}</span>
                     </div>
                   </div>

@@ -191,6 +191,10 @@ function handleMockAction(action, payload) {
       return { success: true };
     }
 
+    case 'change-user-password': {
+      return { success: true };
+    }
+
     case 'update-payment-request': {
       return {
         request: {
@@ -703,6 +707,12 @@ export default async function handler(req, res) {
                name: profileMap[u.id]?.name || '-',
                mobile: profileMap[u.id]?.mobile || '-',
                college: profileMap[u.id]?.college || '-',
+               district: profileMap[u.id]?.district || '-',
+               category: profileMap[u.id]?.category || '',
+               guardian_name: profileMap[u.id]?.guardian_name || '-',
+               guardian_contact: profileMap[u.id]?.guardian_contact || '-',
+               guardian_profession: profileMap[u.id]?.guardian_profession || '-',
+               primary_device_id: profileMap[u.id]?.primary_device_id || null,
                created_at: u.created_at
             }));
           } else {
@@ -713,6 +723,12 @@ export default async function handler(req, res) {
                name: p.name || '-',
                mobile: p.mobile || '-',
                college: p.college || '-',
+               district: p.district || '-',
+               category: p.category || '',
+               guardian_name: p.guardian_name || '-',
+               guardian_contact: p.guardian_contact || '-',
+               guardian_profession: p.guardian_profession || '-',
+               primary_device_id: p.primary_device_id || null,
                created_at: p.created_at
             }));
           }
@@ -727,6 +743,52 @@ export default async function handler(req, res) {
           console.error('[exam-api] list-student-profiles failed:', err);
           logToFile(`list-student-profiles error: ${err.message || err}`);
           return res.status(200).json({ profiles: [], error: err.message });
+        }
+      }
+
+      case 'reset-student-device': {
+        try {
+          const { userId } = payload;
+          if (!userId) return res.status(400).json({ error: 'User ID is required' });
+          
+          const { data, error } = await supabase
+            .from('student_profiles')
+            .update({ primary_device_id: null })
+            .eq('firebase_uid', userId)
+            .select()
+            .single();
+            
+          if (error) throw error;
+          return res.status(200).json({ success: true, profile: data });
+        } catch (err) {
+          console.error('[exam-api] reset-student-device failed:', err);
+          logToFile(`reset-student-device error: ${err.message || err}`);
+          return res.status(500).json({ error: err.message || 'Failed to reset device' });
+        }
+      }
+
+      case 'change-user-password': {
+        try {
+          const { userId, newPassword } = payload;
+          if (!userId) return res.status(400).json({ error: 'User ID is required' });
+          if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+          }
+          
+          if (!serviceKey) {
+            throw new Error('Supabase Service Role Key is not configured. Admin cannot change user password.');
+          }
+
+          const { data, error } = await supabase.auth.admin.updateUserById(userId, {
+            password: newPassword
+          });
+          
+          if (error) throw error;
+          return res.status(200).json({ success: true, user: data.user });
+        } catch (err) {
+          console.error('[exam-api] change-user-password failed:', err);
+          logToFile(`change-user-password error: ${err.message || err}`);
+          return res.status(500).json({ error: err.message || 'Failed to change password' });
         }
       }
 

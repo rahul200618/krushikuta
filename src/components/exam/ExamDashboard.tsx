@@ -307,17 +307,29 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         </Card>
 
         {/* Premium Access Card */}
-        <Card className="p-6 bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200 flex flex-col justify-between gap-4 overflow-hidden relative group">
-          <div className="absolute right-0 bottom-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl -mr-8 -mb-8 pointer-events-none group-hover:bg-amber-500/20 transition-all duration-700" />
+        <Card className={`p-6 flex flex-col justify-between gap-4 overflow-hidden relative group transition-all duration-300 ${
+          accessList.includes(-1) 
+            ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200' 
+            : 'bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200'
+        }`}>
+          <div className={`absolute right-0 bottom-0 w-32 h-32 rounded-full blur-2xl -mr-8 -mb-8 pointer-events-none transition-all duration-700 ${
+            accessList.includes(-1)
+              ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20'
+              : 'bg-amber-500/10 group-hover:bg-amber-500/20'
+          }`} />
           <div className="space-y-2 relative z-10 w-full">
-            <h2 className="text-xl font-extrabold text-amber-950 flex items-center gap-2">
+            <h2 className={`text-xl font-extrabold flex items-center gap-2 ${
+              accessList.includes(-1) ? 'text-emerald-950' : 'text-amber-950'
+            }`}>
               {accessList.includes(-1) ? (
-                <><Unlock className="w-5 h-5 text-amber-600" /> Premium Access Active</>
+                <><Unlock className="w-5 h-5 text-emerald-600" /> Open All Papers</>
               ) : (
                 <><Lock className="w-5 h-5 text-amber-600" /> Get Full Access</>
               )}
             </h2>
-            <p className="text-sm text-amber-800/80 leading-relaxed">
+            <p className={`text-sm leading-relaxed ${
+              accessList.includes(-1) ? 'text-emerald-800/80' : 'text-amber-800/80'
+            }`}>
               {accessList.includes(-1) 
                 ? "You have full unrestricted access to all premium tests, previous years' papers, and detailed performance insights." 
                 : "Unlock all 36 premium mock tests, high-yield practice questions, and detailed analytics designed by agricultural specialists."}
@@ -327,9 +339,9 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
             {accessList.includes(-1) ? (
               <Button 
                 onClick={() => navigate({ to: '/ao/aao/premium' })} 
-                className="bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer transition-all duration-200"
               >
-                Go to Premium Area
+                Open All Papers
               </Button>
             ) : pendingPayment ? (
               <Button 

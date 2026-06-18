@@ -161,7 +161,7 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
             question_text: qText,
             options,
             correct_option_index: correctIdx >= 0 ? correctIdx : 0,
-            marks: 4,
+            marks: 3,
             topic: 'General',
             image_url: imageUrls[qNumStr] || null,
           });

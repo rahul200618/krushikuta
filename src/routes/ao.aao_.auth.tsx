@@ -162,6 +162,7 @@ function AuthPage() {
         }
       }
       toast.success('Successfully logged in and profile saved! Welcome to Krishikuta 🎉');
+      sessionStorage.setItem('krushikuta_is_new_user', 'true');
       navigate({ to: '/ao/aao' as any });
     } catch (err: any) {
       setError(err.message || 'Registration failed.');

@@ -5,6 +5,7 @@ import { ExamTestInterface } from "@/components/exam/ExamTestInterface";
 import { getProfile } from "@/lib/exam-api";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { verifyDeviceLock } from "@/lib/device-lock";
 
 export const Route = createFileRoute("/ao/aao_/test/$testId")({
   component: ActiveTestPage,
@@ -32,6 +33,14 @@ function ActiveTestPage() {
       try {
         const res = await getProfile(data.session.user.id);
         setUserProfile(res.profile);
+        if (res.profile) {
+          const lockRes = await verifyDeviceLock(data.session.user.id, res.profile);
+          if (lockRes.locked) {
+            toast.error("Access Denied: This account is locked to another device.");
+            navigate({ to: "/ao/aao" });
+            return;
+          }
+        }
       } catch { } finally {
         setLoading(false);
       }

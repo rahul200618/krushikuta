@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS mock_questions (
     options JSONB NOT NULL,
     correct_option_index INTEGER NOT NULL,
     image_url TEXT,
-    marks INTEGER DEFAULT 4,
+    marks INTEGER DEFAULT 3,
     topic TEXT DEFAULT 'General',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS student_profiles (
     guardian_profession TEXT,
     guardian_contact TEXT,
     category TEXT,
+    primary_device_id TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

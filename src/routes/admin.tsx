@@ -14,8 +14,7 @@ import { services } from "@/lib/site-data";
 import { CheckCircle2, Circle, Trash2, Plus, FileText, Trophy, Settings, Search, Filter, X, Edit3, Image as ImageIcon, Loader2, MessageSquare } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ExamEditorPanel } from "@/components/exam/ExamEditorPanel";
-import { AccessManagerPanel } from "@/components/exam/AccessManagerPanel";
-import { PaymentRequestsPanel } from "@/components/exam/PaymentRequestsPanel";
+import { UsersManagerPanel } from "@/components/exam/UsersManagerPanel";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [{ title: "Admin Dashboard — Krishikuta" }],
@@ -31,6 +30,15 @@ function AdminPage() {
   const [activePopupIdx, setActivePopupIdx] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("showusers") === "true") {
+        return "users";
+      }
+    }
+    return "leads";
+  });
   
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [inquiries, setInquiries] = useState<any[]>([]);
@@ -425,7 +433,7 @@ function AdminPage() {
   return (
     <>
       <div className="flex min-h-screen bg-[#f4f7f4]">
-        <Tabs defaultValue="leads" className="w-full flex flex-col lg:flex-row">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col lg:flex-row">
           
           {/* Sidebar */}
           <div className="w-full lg:w-64 lg:h-screen lg:sticky lg:top-0 shrink-0 flex flex-col bg-white border-r border-[#e0e8e2] p-6 z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
@@ -442,8 +450,6 @@ function AdminPage() {
               <TabsTrigger value="testimonials" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Testimonials</TabsTrigger>
               <TabsTrigger value="settings" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Popups</TabsTrigger>
               <TabsTrigger value="mock-tests" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">AO/AAO</TabsTrigger>
-              <TabsTrigger value="exam-access" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Exam Access</TabsTrigger>
-              <TabsTrigger value="payments" className="w-full justify-start text-left rounded-lg py-2.5 px-3 text-sm font-medium whitespace-nowrap text-[#5e7a63] hover:bg-[#f4f7f4] data-[state=active]:bg-[#eaf2eb] data-[state=active]:text-[#2c5f34] data-[state=active]:shadow-none transition-colors">Payments & QR</TabsTrigger>
             </TabsList>
 
             <div className="mt-auto pt-6">
@@ -814,12 +820,8 @@ function AdminPage() {
             <ExamEditorPanel />
           </TabsContent>
 
-          <TabsContent value="exam-access">
-            <AccessManagerPanel />
-          </TabsContent>
-
-          <TabsContent value="payments">
-            <PaymentRequestsPanel />
+          <TabsContent value="users">
+            <UsersManagerPanel />
           </TabsContent>
 
           </div>

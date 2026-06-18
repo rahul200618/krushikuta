@@ -42,6 +42,8 @@ export const grantAccess = (payload: { userId: string; testId: number; email: st
 export const revokeAccess = (userId: string, testId: number) => examApi('revoke-access', { userId, testId });
 export const listUserAccess = (search?: string) => examApi('list-user-access', { search });
 export const listStudentProfiles = (search?: string) => examApi('list-student-profiles', { search });
+export const resetStudentDevice = (userId: string) => examApi('reset-student-device', { userId });
+export const changeUserPassword = (userId: string, newPassword: string) => examApi('change-user-password', { userId, newPassword });
 
 export const checkUserAccess = (userId: string, testIds: number[]) => examApi('check-user-access', { userId, testIds });
 

@@ -155,6 +155,7 @@ export function ExamAuthForm({ onSuccess, isModal = false }: ExamAuthFormProps) 
       }
 
       toast.success('Account created successfully!');
+      sessionStorage.setItem('krushikuta_is_new_user', 'true');
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');

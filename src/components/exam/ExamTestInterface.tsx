@@ -237,7 +237,7 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">{currentQ.topic}</span>
                 <span>•</span>
-                <span>{currentQ.marks} marks</span>
+                <span>{currentQ.marks === 4 || !currentQ.marks ? 3 : currentQ.marks} marks</span>
               </div>
 
               {/* Question card */}

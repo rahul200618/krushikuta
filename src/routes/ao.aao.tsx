@@ -4,8 +4,10 @@ import { supabase } from "@/lib/supabase";
 import { ExamDashboard } from "@/components/exam/ExamDashboard";
 import { ExamAuthModal } from "@/components/exam/ExamAuthModal";
 import { getProfile } from "@/lib/exam-api";
-import { Loader2, Calendar, Lock, CheckCircle2, Sparkles, ArrowRight } from "lucide-react";
+import { Loader2, Calendar, Lock, CheckCircle2, Sparkles, ArrowRight, ShieldAlert, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { verifyDeviceLock } from "@/lib/device-lock";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/ao/aao")({
   component: ExamPage,
@@ -20,6 +22,7 @@ function ExamPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [userProfile, setUserProfile] = useState<Record<string, unknown> | null>(null);
+  const [deviceLockStatus, setDeviceLockStatus] = useState<'checking' | 'allowed' | 'locked'>('checking');
 
   // Each date releases all 3 subject papers simultaneously
   const RELEASE_DATES = [
@@ -60,13 +63,13 @@ function ExamPage() {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       if (data.session) fetchProfile(data.session.user.id);
-      else setLoadingAuth(false);
+      else { setLoadingAuth(false); setDeviceLockStatus('allowed'); }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) fetchProfile(session.user.id);
-      else { setUserProfile(null); setLoadingAuth(false); }
+      else { setUserProfile(null); setDeviceLockStatus('allowed'); setLoadingAuth(false); }
     });
 
     return () => subscription.unsubscribe();
@@ -76,7 +79,46 @@ function ExamPage() {
     try {
       const res = await getProfile(uid);
       setUserProfile(res.profile);
-    } catch { } finally {
+      if (res.profile) {
+        const isNewUser = sessionStorage.getItem('krushikuta_is_new_user') === 'true' ||
+                          (res.profile.created_at && (Date.now() - new Date(res.profile.created_at).getTime() < 300000)); // 5 mins
+        
+        sessionStorage.removeItem('krushikuta_is_new_user');
+
+        const lockRes = await verifyDeviceLock(uid, res.profile, isNewUser);
+        if (lockRes.needsRegistration) {
+          setDeviceLockStatus('needs_registration');
+        } else if (lockRes.locked) {
+          setDeviceLockStatus('locked');
+        } else {
+          setDeviceLockStatus('allowed');
+        }
+      } else {
+        setDeviceLockStatus('allowed');
+      }
+    } catch {
+      setDeviceLockStatus('allowed');
+    } finally {
+      setLoadingAuth(false);
+    }
+  };
+
+  const handleRegisterDevice = async () => {
+    if (!session || !userProfile) return;
+    setLoadingAuth(true);
+    try {
+      const uid = session.user.id;
+      const { registerDevice } = await import("@/lib/device-lock");
+      const lockRes = await registerDevice(uid, userProfile);
+      if (lockRes.allowed) {
+        setDeviceLockStatus('allowed');
+        toast.success("Device registered successfully! This is now your primary device.");
+      } else {
+        toast.error("Failed to register device");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error registering device");
+    } finally {
       setLoadingAuth(false);
     }
   };
@@ -262,6 +304,116 @@ function ExamPage() {
           @keyframes f2{0%,100%{transform:rotate(-15deg) translateY(0)}50%{transform:rotate(-10deg) translateY(-10px)}}
           @keyframes f3{0%,100%{transform:rotate(10deg) translateY(0)}50%{transform:rotate(6deg) translateY(-8px)}}
         `}</style>
+      </div>
+    );
+  }
+
+  if (session && deviceLockStatus === 'needs_registration') {
+    return (
+      <div className="min-h-screen bg-[#071a0e] flex flex-col items-center justify-center p-4" style={{ fontFamily:"'Inter',sans-serif" }}>
+        <div className="absolute inset-0 pointer-events-none">
+          <div style={{ position:'absolute', top:'10%', left:'10%', width:'50%', height:'50%', borderRadius:'50%', background:'radial-gradient(circle,rgba(52,211,153,0.08) 0%,transparent 70%)', filter:'blur(60px)' }} />
+          <div style={{ position:'absolute', bottom:'10%', right:'10%', width:'50%', height:'50%', borderRadius:'50%', background:'radial-gradient(circle,rgba(16,185,129,0.05) 0%,transparent 70%)', filter:'blur(80px)' }} />
+        </div>
+        
+        <div className="w-full max-w-md bg-white border border-[#e0e8e2] p-8 rounded-3xl shadow-2xl relative z-10 text-center space-y-6 animate-fade-in">
+          <div className="w-16 h-16 bg-[#eaf2eb] rounded-2xl flex items-center justify-center text-[#2c5f34] mx-auto shadow-[0_4px_20px_rgba(44,95,52,0.15)] animate-bounce">
+            <Lock className="w-8 h-8" />
+          </div>
+          
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-slate-800">Register Primary Device</h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              To enforce exam integrity and secure your account, you must register this device/browser as your primary login device.
+            </p>
+          </div>
+          
+          <div className="p-4 bg-[#f4f7f4] border border-[#e0e8e2] rounded-2xl text-left space-y-2.5 text-xs text-slate-600">
+            <div className="font-semibold text-[#1a3820] flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[#2c5f34] shrink-0" /> Device Lock Protection
+            </div>
+            <p className="leading-relaxed">
+              Once registered, you can only access the mock test dashboard from this browser on this device. For changes, you will need to ask the admin.
+            </p>
+            {userProfile && (
+              <div className="pt-2 border-t border-[#e0e8e2] space-y-1 text-slate-500">
+                <div>Name: <span className="font-semibold text-[#1a3820]">{String(userProfile.name)}</span></div>
+                <div>Email: <span className="font-semibold text-[#1a3820]">{String(userProfile.email)}</span></div>
+                <div>Mobile: <span className="font-semibold text-[#1a3820]">{String(userProfile.mobile)}</span></div>
+              </div>
+            )}
+          </div>
+          
+          <div className="space-y-3 pt-2">
+            <Button 
+              onClick={handleRegisterDevice}
+              className="w-full py-5 rounded-2xl bg-[#2c5f34] hover:bg-[#1a3820] text-white font-semibold flex items-center justify-center gap-2 cursor-pointer shadow-[0_4px_16px_rgba(44,95,52,0.25)] transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4" /> Register This Device
+            </Button>
+            <Button 
+              onClick={async () => {
+                await supabase.auth.signOut();
+              }}
+              variant="outline" 
+              className="w-full py-5 rounded-2xl border-slate-200 text-slate-700 font-semibold flex items-center justify-center gap-2 hover:bg-slate-50 cursor-pointer"
+            >
+              <LogOut className="w-4 h-4 text-slate-500" /> Sign Out
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (session && deviceLockStatus === 'locked') {
+    return (
+      <div className="min-h-screen bg-[#071a0e] flex flex-col items-center justify-center p-4" style={{ fontFamily:"'Inter',sans-serif" }}>
+        <div className="absolute inset-0 pointer-events-none">
+          <div style={{ position:'absolute', top:'10%', left:'10%', width:'50%', height:'50%', borderRadius:'50%', background:'radial-gradient(circle,rgba(239,68,68,0.08) 0%,transparent 70%)', filter:'blur(60px)' }} />
+          <div style={{ position:'absolute', bottom:'10%', right:'10%', width:'50%', height:'50%', borderRadius:'50%', background:'radial-gradient(circle,rgba(239,68,68,0.05) 0%,transparent 70%)', filter:'blur(80px)' }} />
+        </div>
+        
+        <div className="w-full max-w-md bg-white border border-red-100 p-8 rounded-3xl shadow-2xl relative z-10 text-center space-y-6 animate-fade-in">
+          <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mx-auto shadow-[0_4px_20px_rgba(239,68,68,0.15)] animate-pulse">
+            <Lock className="w-8 h-8" />
+          </div>
+          
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold text-slate-800">Account Device Locked</h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
+              To enforce exam integrity and prevent account sharing, your account is locked to your primary registered device.
+            </p>
+          </div>
+          
+          <div className="p-4 bg-red-50/50 border border-red-100/50 rounded-2xl text-left space-y-2.5 text-xs text-slate-600">
+            <div className="font-semibold text-slate-700 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-500 shrink-0" /> Need to login from a new device?
+            </div>
+            <p className="leading-relaxed">
+              If you have purchased a new phone, switched browsers, or cleared your browser data, please contact the **Krushikuta Administrator** to request a registered device reset.
+            </p>
+            {userProfile && (
+              <div className="pt-2 border-t border-red-100/50 space-y-1 text-slate-500">
+                <div>Name: <span className="font-semibold text-slate-700">{String(userProfile.name)}</span></div>
+                <div>Email: <span className="font-semibold text-slate-700">{String(userProfile.email)}</span></div>
+                <div>Mobile: <span className="font-semibold text-slate-700">{String(userProfile.mobile)}</span></div>
+              </div>
+            )}
+          </div>
+          
+          <div className="pt-2">
+            <Button 
+              onClick={async () => {
+                await supabase.auth.signOut();
+              }}
+              variant="outline" 
+              className="w-full py-5 rounded-2xl border-slate-200 text-slate-700 font-semibold flex items-center justify-center gap-2 hover:bg-slate-50 cursor-pointer"
+            >
+              <LogOut className="w-4 h-4 text-slate-500" /> Sign Out from Account
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
