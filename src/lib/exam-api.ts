@@ -54,4 +54,12 @@ export const listPaymentRequests = () => examApi('list-payment-requests');
 export const updatePaymentRequest = (requestId: number, status: string, userId?: string, testId?: number) =>
   examApi('update-payment-request', { requestId, status, userId, testId });
 
+export const getPaymentStatus = (userEmail: string) =>
+  examApi('get-payment-status', { userEmail });
+
+export const uploadQrCode = (base64Image: string, contentType: string) =>
+  examApi('upload-qr-code', { base64Image, contentType });
+export const deleteQrCode = () =>
+  examApi('delete-qr-code');
+
 export default examApi;

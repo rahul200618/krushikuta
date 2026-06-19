@@ -894,6 +894,63 @@ export default async function handler(req, res) {
         }
       }
 
+      case 'get-payment-status': {
+        try {
+          const { userEmail } = payload;
+          if (!userEmail) return res.status(400).json({ error: 'Missing userEmail' });
+          const { data, error } = await supabase
+            .from('payment_requests')
+            .select('status')
+            .eq('user_email', userEmail)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (error) throw error;
+          return res.status(200).json({ status: data?.status || null });
+        } catch (err) {
+          return res.status(500).json({ error: err.message || 'Failed to get payment status' });
+        }
+      }
+
+      case 'upload-qr-code': {
+        try {
+          const { base64Image, contentType } = payload;
+          if (!base64Image) {
+            return res.status(400).json({ error: 'Missing base64Image' });
+          }
+          const buffer = Buffer.from(base64Image, 'base64');
+          
+          const { data, error } = await supabase.storage
+            .from('public1')
+            .upload('premium_qr.jpg', buffer, {
+              contentType: contentType || 'image/jpeg',
+              upsert: true
+            });
+            
+          if (error) throw error;
+          return res.status(200).json({ success: true, data });
+        } catch (err) {
+          console.error('[exam-api] upload-qr-code failed:', err);
+          logToFile(`upload-qr-code error: ${err.message || err}`);
+          return res.status(500).json({ error: err.message || 'Failed to upload QR code' });
+        }
+      }
+
+      case 'delete-qr-code': {
+        try {
+          const { data, error } = await supabase.storage
+            .from('public1')
+            .remove(['premium_qr.jpg']);
+            
+          if (error) throw error;
+          return res.status(200).json({ success: true, data });
+        } catch (err) {
+          console.error('[exam-api] delete-qr-code failed:', err);
+          logToFile(`delete-qr-code error: ${err.message || err}`);
+          return res.status(500).json({ error: err.message || 'Failed to delete QR code' });
+        }
+      }
+
       case 'check-user-access': {
         try {
           const { userId, testIds, email } = payload;

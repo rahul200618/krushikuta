@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Upload, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +12,8 @@ export function PaymentRequestsPanel() {
   const [loading, setLoading] = useState(true);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [uploadingQR, setUploadingQR] = useState(false);
+  const [upiId, setUpiId] = useState('');
+  const [savingUpi, setSavingUpi] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchRequests = async () => {
@@ -29,15 +32,32 @@ export function PaymentRequestsPanel() {
   };
 
   const fetchQR = () => {
-    const { data } = supabase.storage.from('public').getPublicUrl('premium_qr.jpg');
+    const { data } = supabase.storage.from('public1').getPublicUrl('premium_qr.jpg');
     if (data?.publicUrl) {
       setQrUrl(data.publicUrl + `?t=${Date.now()}`);
+    }
+  };
+
+  const fetchUpi = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('id')
+        .like('id', 'upi_id:%')
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.id) {
+        setUpiId(data.id.replace('upi_id:', ''));
+      }
+    } catch (err) {
+      console.error('Error fetching UPI ID:', err);
     }
   };
 
   useEffect(() => {
     fetchRequests();
     fetchQR();
+    fetchUpi();
 
     // Realtime subscription for new payment requests
     const channel = supabase.channel('admin-payment-requests')
@@ -60,26 +80,57 @@ export function PaymentRequestsPanel() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    setUploadingQR(true);
-    try {
-      // Delete old file if exists to prevent caching issues, or just overwrite
-      await supabase.storage.from('public').upload('premium_qr.jpg', file, { upsert: true });
-      fetchQR();
-      toast.success('QR Code updated successfully!');
-    } catch (error: any) {
-      toast.error('Failed to upload QR code: ' + error.message);
-    } finally {
-      setUploadingQR(false);
-    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Image = (reader.result as string).split(',')[1];
+      setUploadingQR(true);
+      try {
+        const { uploadQrCode } = await import('@/lib/exam-api');
+        const res = await uploadQrCode(base64Image, file.type);
+        if (res.error) throw new Error(res.error);
+        fetchQR();
+        toast.success('QR Code updated successfully!');
+      } catch (error: any) {
+        toast.error('Failed to upload QR code: ' + error.message);
+      } finally {
+        setUploadingQR(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleDeleteQR = async () => {
     try {
-      await supabase.storage.from('public').remove(['premium_qr.jpg']);
+      const { deleteQrCode } = await import('@/lib/exam-api');
+      const res = await deleteQrCode();
+      if (res.error) throw new Error(res.error);
       setQrUrl(null);
       toast.success('QR Code removed');
-    } catch (error) {
-      toast.error('Failed to remove QR code');
+    } catch (error: any) {
+      toast.error('Failed to remove QR code: ' + error.message);
+    }
+  };
+
+  const handleSaveUpi = async () => {
+    setSavingUpi(true);
+    try {
+      const { error: delError } = await supabase
+        .from('site_settings')
+        .delete()
+        .like('id', 'upi_id:%');
+      if (delError) throw delError;
+
+      if (upiId.trim()) {
+        const { error: insError } = await supabase
+          .from('site_settings')
+          .insert({ id: `upi_id:${upiId.trim()}`, value: true });
+        if (insError) throw insError;
+      }
+      toast.success('UPI ID updated successfully!');
+    } catch (error: any) {
+      toast.error('Failed to save UPI ID: ' + error.message);
+    } finally {
+      setSavingUpi(false);
     }
   };
 
@@ -127,6 +178,24 @@ export function PaymentRequestsPanel() {
                 <Trash2 className="w-4 h-4 mr-2" /> Remove
               </Button>
             )}
+          </div>
+        </div>
+        
+        <div className="border-t border-border mt-6 pt-6">
+          <h4 className="font-semibold text-sm mb-1 text-foreground">UPI ID (Optional)</h4>
+          <p className="text-muted-foreground text-xs mb-3">Provide a text UPI ID where users can send payments directly. This will be shown on the checkout page with a quick-copy button.</p>
+          <div className="flex max-w-md gap-3">
+            <Input
+              type="text"
+              value={upiId}
+              onChange={(e) => setUpiId(e.target.value)}
+              placeholder="e.g. karthik@okaxis"
+              className="h-10 font-mono"
+            />
+            <Button onClick={handleSaveUpi} disabled={savingUpi} className="shrink-0">
+              {savingUpi ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Save UPI ID
+            </Button>
           </div>
         </div>
       </Card>
