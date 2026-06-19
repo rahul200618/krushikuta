@@ -473,51 +473,6 @@ function PremiumSchedulePage() {
                 </Card>
               </div>
             )}
-
-            <Card className="p-6 border border-slate-200 shadow-sm bg-white rounded-2xl space-y-4">
-              <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-                <h3 className="font-bold text-slate-800 font-serif text-lg flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-emerald-600" /> Papers Release Calendar
-                </h3>
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1 rounded-full uppercase tracking-wider">
-                  12 Dates · 36 Papers
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {RELEASE_DATES.map((item) => {
-                  const isReleased = checkReleased(item.date);
-                  return (
-                    <div 
-                      key={item.paper} 
-                      className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 ${
-                        isReleased 
-                          ? 'border-emerald-100 bg-emerald-50/45 text-emerald-950 shadow-sm' 
-                          : 'border-slate-100 bg-slate-50/50 text-slate-500'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-65">{item.paper}</span>
-                        {isReleased ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 animate-pulse" />
-                        ) : (
-                          <Lock className="w-3 h-3 text-slate-300 shrink-0" />
-                        )}
-                      </div>
-                      <div className="font-bold text-sm tracking-tight text-slate-800">{formatDateLabel(item.date)}</div>
-                      <div className="text-[10px] mt-1 font-semibold">
-                        {isReleased ? (
-                          <span className="text-emerald-700">Available Now</span>
-                        ) : (
-                          <span className="text-slate-400">Scheduled</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
             <div className="space-y-4">
               <div className="flex items-center justify-between px-1">
                 <h2 className="font-bold text-slate-800 font-serif text-xl">Premium Mock Test Series</h2>

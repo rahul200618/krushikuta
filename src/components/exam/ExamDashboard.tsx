@@ -417,18 +417,18 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
           <div className="relative z-10 pt-2 w-full">
             {accessList.includes(-1) ? (
               <Button 
-                onClick={() => setShowPremiumOnDashboard(!showPremiumOnDashboard)} 
+                onClick={() => navigate({ to: '/ao/aao/premium' })} 
                 className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer transition-all duration-200"
               >
-                {showPremiumOnDashboard ? 'Close All Papers' : 'Open All Papers'}
+                Open All Papers
               </Button>
             ) : accessList.includes(-2) ? (
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button 
-                  onClick={() => setShowPremiumOnDashboard(!showPremiumOnDashboard)} 
+                  onClick={() => navigate({ to: '/ao/aao/premium' })} 
                   className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md px-4 py-2.5 rounded-xl flex-1 cursor-pointer"
                 >
-                  {showPremiumOnDashboard ? 'Close Unlocked Papers' : 'Open Unlocked Papers'}
+                  Open Unlocked Papers
                 </Button>
                 <Button 
                   onClick={() => navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any })} 
@@ -459,7 +459,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         </Card>
       </div>
 
-      {showPremiumOnDashboard && (
+      {(accessList.includes(-1) || accessList.includes(-2)) && (
         <div className="space-y-6 pt-4 animate-in fade-in duration-500">
           <Card className="p-6 border border-slate-200 shadow-sm bg-white rounded-2xl space-y-4">
             <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
@@ -480,13 +480,13 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
                     className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 ${
                       isReleased 
                         ? 'border-emerald-100 bg-emerald-50/45 text-emerald-950 shadow-sm' 
-                        : 'border-slate-100 bg-slate-50/50 text-slate-500'
+                        : 'border-slate-100 bg-slate-50/50 text-slate-505'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1 mb-1">
                       <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-65">{item.paper}</span>
                       {isReleased ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 animate-pulse" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       ) : (
                         <Lock className="w-3 h-3 text-slate-300 shrink-0" />
                       )}
@@ -504,57 +504,6 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
               })}
             </div>
           </Card>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="font-bold text-slate-800 font-serif text-xl">Premium Mock Test Series</h2>
-              <p className="text-xs text-muted-foreground">{paidSubjects.length} subjects available</p>
-            </div>
-
-            <div className="space-y-3">
-              {paidSubjects.map((subject) => {
-                const isUnlocked = isSubjectUnlocked(subject.category) || isSubjectPartiallyUnlocked(subject.category);
-                
-                const handleCardClick = () => {
-                  navigate({ to: '/ao/aao/premium', search: { subject: subject.category } as any });
-                };
-
-                return (
-                  <div 
-                    key={subject.category} 
-                    onClick={handleCardClick}
-                    className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-soft transition-all duration-300 cursor-pointer p-5 flex items-center justify-between gap-4 hover:bg-slate-50/50"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/30 flex items-center justify-center shrink-0">
-                        <Folder className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800 text-base md:text-lg font-serif">{subject.category}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">{subject.papers.length} Mock Test Papers</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <Button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCardClick();
-                        }}
-                        size="sm"
-                        className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold h-8 rounded-full px-4 border shadow-sm transition-all"
-                      >
-                        Open
-                      </Button>
-                      <div className="text-slate-400">
-                        <ChevronRight className="w-5 h-5" />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </div>
       )}
     </div>
