@@ -5,7 +5,7 @@ import { listMockTests, checkUserAccess, getUserPerformance } from '@/lib/exam-a
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Loader2, BookOpen, Folder, ChevronRight, Calendar, Lock, CheckCircle2, Sparkles, ArrowRight, X } from 'lucide-react';
+import { ArrowLeft, Loader2, BookOpen, Folder, ChevronRight, Calendar, Lock, Unlock, CheckCircle2, Sparkles, ArrowRight, X } from 'lucide-react';
 import { ExamAuthModal } from '@/components/exam/ExamAuthModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -474,9 +474,17 @@ function PremiumSchedulePage() {
               </div>
             )}
             <div className="space-y-4">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="font-bold text-slate-800 font-serif text-xl">Premium Mock Test Series</h2>
-                <p className="text-xs text-muted-foreground">{paidSubjects.length} subjects available</p>
+              <div className="flex flex-col gap-1 border-b border-slate-100 pb-3 mb-2">
+                <h2 className="font-extrabold text-slate-900 font-serif text-xl sm:text-2xl flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-emerald-600 shrink-0" />
+                  Premium Mock Test Series
+                </h2>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span className="font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100/50">
+                    {paidSubjects.length} subjects
+                  </span>
+                  <span>available for premium preparation</span>
+                </div>
               </div>
 
               {paidSubjects.length === 0 ? (
@@ -505,30 +513,39 @@ function PremiumSchedulePage() {
                       <div 
                         key={subject.category} 
                         onClick={handleCardClick}
-                        className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-soft transition-all duration-300 cursor-pointer p-5 flex items-center justify-between gap-4 hover:bg-slate-50/50"
+                        className="group bg-gradient-to-br from-white via-white to-slate-50/20 rounded-2xl shadow-sm border border-slate-100 hover:border-slate-200 hover:to-emerald-50/10 overflow-hidden hover:shadow-soft hover:-translate-y-0.5 transition-all duration-300 cursor-pointer p-4 sm:p-5 flex items-center justify-between gap-4"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/30 flex items-center justify-center shrink-0">
-                            <Folder className="w-5 h-5" />
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-600 border border-emerald-100/50 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-300">
+                            <Folder className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
                           </div>
                           <div>
-                            <h3 className="font-bold text-slate-800 text-base md:text-lg font-serif">{subject.category}</h3>
-                            <p className="text-xs text-slate-500 mt-0.5">{subject.papers.length} Mock Test Papers</p>
+                            <h3 className="font-extrabold text-slate-800 text-sm sm:text-base md:text-lg font-serif leading-snug group-hover:text-emerald-700 transition-colors">{subject.category}</h3>
+                            <p className="text-[11px] sm:text-xs text-slate-500 mt-1 font-medium flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              {subject.papers.length} {subject.papers.length === 1 ? 'Mock Test Paper' : 'Mock Test Papers'}
+                            </p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                           <Button 
                             onClick={(e) => {
                               e.stopPropagation();
                               handleCardClick();
                             }}
                             size="sm"
-                            className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold h-8 rounded-full px-4 border shadow-sm transition-all"
+                            className={`text-xs font-bold h-8 rounded-xl px-3.5 shadow-sm transition-all duration-300 flex items-center gap-1 cursor-pointer border ${
+                              isUnlocked 
+                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200' 
+                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                            }`}
                           >
-                            Open
+                            {!isUnlocked && <Lock className="w-3.5 h-3.5 text-amber-600" />}
+                            <span>{isUnlocked ? 'Open' : 'Unlock'}</span>
+                            {isUnlocked && <ArrowRight className="w-3.5 h-3.5 opacity-70 group-hover:translate-x-0.5 transition-transform" />}
                           </Button>
-                          <div className="text-slate-400">
+                          <div className="text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all duration-300">
                             <ChevronRight className="w-5 h-5" />
                           </div>
                         </div>
