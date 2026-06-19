@@ -158,13 +158,15 @@ export function Navbar({ isExamPage }: { isExamPage?: boolean }) {
               Login / Signup
             </Button>
           )}
-          <button
-            className="p-2 text-foreground"
-            onClick={() => setOpen((v) => !v)}
-            aria-label="Toggle menu"
-          >
-            {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
+          {!(isExamPage && !user) && (
+            <button
+              className="p-2 text-foreground"
+              onClick={() => setOpen((v) => !v)}
+              aria-label="Toggle menu"
+            >
+              {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          )}
         </div>
       </nav>
 
