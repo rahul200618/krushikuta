@@ -779,7 +779,7 @@ export function UsersManagerPanel() {
                     <span className="text-xs font-bold text-[#1a3820] block pt-2">Paper-by-Paper Status</span>
                     <div className="space-y-1.5 max-h-[200px] overflow-y-auto border border-[#e0e8e2] rounded-xl p-2 bg-slate-50/50">
                       {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => {
-                        const isFree = t.is_free || t.price === 0;
+                        const isFree = t.is_free;
                         const isFirst6 = !isFree && first6TestIds.includes(t.id);
                         
                         let status: 'free' | 'bundle-all' | 'bundle-6' | 'direct' | 'locked' = 'locked';
@@ -1125,7 +1125,7 @@ export function UsersManagerPanel() {
               ) : (
                 <div className="space-y-1.5 max-h-[220px] overflow-y-auto border border-[#e0e8e2] rounded-xl p-2 bg-slate-50/50">
                   {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => {
-                    const isFree = t.is_free || t.price === 0;
+                    const isFree = t.is_free;
                     const isFirst6 = !isFree && first6TestIds.includes(t.id);
                     
                     let status: 'free' | 'bundle-all' | 'bundle-6' | 'direct' | 'locked' = 'locked';

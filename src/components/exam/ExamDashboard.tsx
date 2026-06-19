@@ -101,13 +101,13 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
 
   const categories = ['All', ...Array.from(new Set(tests.map(t => t.category).filter(Boolean)))];
   const filteredTests = activeCategory === 'All' ? tests : tests.filter(t => t.category === activeCategory);
-  const firstFreeTest = tests.find(t => t.is_free || t.price === 0);
+  const firstFreeTest = tests.find(t => t.is_free);
 
   const paidTests = tests.filter(t => !t.is_free && t.title !== '_SUBJECT_PLACEHOLDER_').sort((a, b) => a.id - b.id);
   const first6TestIds = paidTests.slice(0, 6).map(t => t.id);
 
   const getTestStatus = (test: MockTest): 'free' | 'unlocked' | 'paid' => {
-    if (test.is_free || test.price === 0) return 'free';
+    if (test.is_free) return 'free';
     if (accessList.includes(test.id) || 
         accessList.includes(-1) || 
         (accessList.includes(-2) && first6TestIds.includes(test.id))) {
@@ -192,7 +192,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
 
   // ── FREE TESTS VIEW ──────────────────────────────────────
   if (view === 'free-tests') {
-    const freeTests = tests.filter(t => t.is_free || t.price === 0);
+    const freeTests = tests.filter(t => t.is_free);
 
     return (
       <div className="space-y-6">
