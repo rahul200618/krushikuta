@@ -333,24 +333,24 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
   const accessibleTests = accessList.includes(-1) ? tests : tests.filter(t => getTestStatus(t) === 'free' || getTestStatus(t) === 'unlocked');
 
   const stats = [
-    { icon: BookOpen, label: 'Tests Available', value: accessibleTests.length, color: 'text-blue-600' },
-    { icon: FileText, label: 'Attempts', value: performance?.totalAttempts ?? 0, color: 'text-green-600' },
-    { icon: Trophy, label: 'Total Questions', value: `${accessibleTests.reduce((acc, t) => acc + (t.total_questions ?? 0), 0)}`, color: 'text-purple-600' },
+    { icon: BookOpen, label: 'Tests Available', value: accessibleTests.length, color: 'text-blue-600', bgColor: 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-100/50 dark:border-blue-900/30' },
+    { icon: FileText, label: 'Attempts', value: performance?.totalAttempts ?? 0, color: 'text-green-600', bgColor: 'bg-green-50/80 dark:bg-green-950/40 border-green-100/50 dark:border-green-900/30' },
+    { icon: Trophy, label: 'Total Questions', value: `${accessibleTests.reduce((acc, t) => acc + (t.total_questions ?? 0), 0)}`, color: 'text-purple-600', bgColor: 'bg-purple-50/80 dark:bg-purple-950/40 border-purple-100/50 dark:border-purple-900/30' },
   ];
 
   // ── DEFAULT VIEW (DASHBOARD CARDS) ──────────────────────
   return (
     <div className="space-y-8">
       {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {stats.map(({ icon: Icon, label, value, color }) => (
-          <Card key={label} className="p-4 flex items-center gap-4 border-border hover:shadow-soft transition-all">
-            <div className={`w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0 ${color}`}>
-              <Icon className="w-5 h-5" />
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        {stats.map(({ icon: Icon, label, value, color, bgColor }) => (
+          <Card key={label} className="group p-2.5 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-2 sm:gap-4 border-border hover:shadow-soft transition-all duration-300">
+            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 border group-hover:scale-105 transition-transform duration-300 ${bgColor} ${color}`}>
+              <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">{label}</p>
-              <p className="text-xl font-bold">{value}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-medium leading-tight sm:truncate">{label}</p>
+              <p className="text-sm sm:text-xl font-extrabold mt-0.5 sm:mt-1 leading-none">{value}</p>
             </div>
           </Card>
         ))}
