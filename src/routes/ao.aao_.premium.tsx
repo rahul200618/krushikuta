@@ -31,7 +31,7 @@ function PremiumSchedulePage() {
   const [hasAccess, setHasAccess] = useState(false);
   const [performance, setPerformance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(undefined);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showPricing, setShowPricing] = useState<boolean | null>(null); // null = not yet determined
@@ -97,6 +97,7 @@ function PremiumSchedulePage() {
 
   useEffect(() => {
     const load = async () => {
+      if (session === undefined) return;
       setLoading(true);
       try {
         const testsRes = await listMockTests();
