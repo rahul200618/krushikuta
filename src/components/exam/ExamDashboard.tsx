@@ -397,10 +397,8 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
     },
     { 
       icon: Trophy, 
-      label: isUnlocked ? 'Total Questions' : 'Papers Available', 
-      value: isUnlocked 
-        ? `${accessibleTests.reduce((acc, t) => acc + ((t as any).total_questions ?? 0), 0)}`
-        : allPaidTests.length,
+      label: 'Total Questions', 
+      value: `${allTests.reduce((acc, t) => acc + ((t as any).total_questions ?? 0), 0)}`,
       color: 'text-purple-600 dark:text-purple-400', 
       bgColor: 'bg-purple-50/80 dark:bg-purple-950/40', 
       borderColor: 'border-purple-100/70 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700',
