@@ -63,19 +63,55 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         setPerformance(perfRes);
 
         if (userId) {
-          const { access } = await checkUserAccess(userId, []);
-          if (access && access.length > 0) {
-            setAccessList(access);
+          // Query user_purchases directly with user's own session (bypasses RLS correctly)
+          const { data: purchaseRows, error: purchaseErr } = await supabase
+            .from('user_purchases')
+            .select('mock_test_id')
+            .eq('user_id', userId)
+            .eq('status', 'active');
+
+          if (purchaseErr) {
+            console.error('[ExamDashboard] Error checking purchases by user_id:', purchaseErr);
           }
-          
+
+          let access = (purchaseRows || []).map((r: any) => r.mock_test_id);
+
+          // Fallback: query backend API to check by email and backfill (bypasses RLS)
+          if (access.length === 0 && userEmail) {
+            console.log('[ExamDashboard] Direct access list empty. Querying backend by email:', userEmail);
+            try {
+              const res = await checkUserAccess(userId, [], userEmail);
+              if (res && res.access && res.access.length > 0) {
+                access = res.access;
+                console.log('[ExamDashboard] Backend check-user-access found purchases by email:', access);
+              }
+            } catch (e) {
+              console.error('[ExamDashboard] Failed to check user access via backend API:', e);
+            }
+          }
+
+          console.log('[ExamDashboard] Loaded access list:', access, 'for user:', userId, userEmail);
+          if (access.length > 0) {
+            setAccessList(access);
+          } else {
+            setAccessList([]);
+          }
+
           if (userEmail) {
-            const { data } = await supabase.from('payment_requests').select('*').eq('user_email', userEmail).order('created_at', { ascending: false }).limit(1);
+            const { data, error: payErr } = await supabase.from('payment_requests').select('*').eq('user_email', userEmail).order('created_at', { ascending: false }).limit(1);
+            if (payErr) {
+              console.error('[ExamDashboard] Error checking payment requests:', payErr);
+            }
             if (data && data.length > 0 && data[0].status === 'pending') {
               setPendingPayment(data[0]);
+            } else {
+              setPendingPayment(null);
             }
           }
         }
-      } catch { /* silent */ } finally {
+      } catch (err) {
+        console.error('[ExamDashboard] General load error:', err);
+      } finally {
         setLoading(false);
       }
     };
@@ -330,13 +366,21 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
     );
   }
 
-  const accessibleTests = accessList.includes(-1) ? tests : tests.filter(t => getTestStatus(t) === 'free' || getTestStatus(t) === 'unlocked');
+  const isUnlocked = accessList.includes(-1);
+  const isPartiallyUnlocked = accessList.includes(-2);
+
+  const accessibleTests = isUnlocked ? tests : tests.filter(t => getTestStatus(t) === 'free' || getTestStatus(t) === 'unlocked');
+  const allTests = tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_');
+  const allPaidTests = tests.filter(t => !t.is_free && t.title !== '_SUBJECT_PLACEHOLDER_');
+
+  // For stats: show all tests when not unlocked, only accessible when unlocked
+  const statsTests = isUnlocked ? accessibleTests : allTests;
 
   const stats = [
     { 
       icon: BookOpen, 
       label: 'Tests Available', 
-      value: accessibleTests.length, 
+      value: statsTests.length, 
       color: 'text-blue-600 dark:text-blue-400', 
       bgColor: 'bg-blue-50/80 dark:bg-blue-950/40', 
       borderColor: 'border-blue-100/70 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700',
@@ -353,8 +397,10 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
     },
     { 
       icon: Trophy, 
-      label: 'Total Questions', 
-      value: `${accessibleTests.reduce((acc, t) => acc + (t.total_questions ?? 0), 0)}`, 
+      label: isUnlocked ? 'Total Questions' : 'Papers Available', 
+      value: isUnlocked 
+        ? `${accessibleTests.reduce((acc, t) => acc + ((t as any).total_questions ?? 0), 0)}`
+        : allPaidTests.length,
       color: 'text-purple-600 dark:text-purple-400', 
       bgColor: 'bg-purple-50/80 dark:bg-purple-950/40', 
       borderColor: 'border-purple-100/70 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700',
@@ -362,8 +408,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
     },
   ];
 
-  const isUnlocked = accessList.includes(-1);
-  const isPartiallyUnlocked = accessList.includes(-2);
+  // (isUnlocked and isPartiallyUnlocked declared above)
 
   const cardBg = isUnlocked
     ? "from-indigo-50/70 via-white to-blue-50/30 dark:from-indigo-950/15 dark:via-slate-900 dark:to-blue-950/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700"
@@ -496,53 +541,59 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         </Card>
       </div>
 
-      {(accessList.includes(-1) || accessList.includes(-2)) && (
-        <div className="space-y-6 pt-4 animate-in fade-in duration-500">
-          <Card className="p-6 border border-slate-200 shadow-sm bg-white rounded-2xl space-y-4">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-              <h3 className="font-bold text-slate-800 font-serif text-lg flex items-center gap-2">
-                <Clock className="w-5 h-5 text-emerald-600" /> Papers Release Calendar
-              </h3>
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1 rounded-full uppercase tracking-wider">
-                12 Dates · 36 Papers
-              </span>
-            </div>
+      {/* Paper Release Calendar — always visible */}
+      <div className="space-y-6 pt-2 animate-in fade-in duration-500">
+        <Card className="p-5 sm:p-6 border border-slate-200 shadow-sm bg-white rounded-2xl space-y-4">
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+            <h3 className="font-bold text-slate-800 font-serif text-base sm:text-lg flex items-center gap-2">
+              <Clock className="w-5 h-5 text-emerald-600" /> Papers Release Calendar
+            </h3>
+            <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1 rounded-full uppercase tracking-wider shrink-0">
+              12 Dates · 36 Papers
+            </span>
+          </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {RELEASE_DATES.map((item) => {
-                const isReleased = checkReleased(item.date);
-                return (
-                  <div 
-                    key={item.paper} 
-                    className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 ${
-                      isReleased 
-                        ? 'border-emerald-100 bg-emerald-50/45 text-emerald-950 shadow-sm' 
-                        : 'border-slate-100 bg-slate-50/50 text-slate-505'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-65">{item.paper}</span>
-                      {isReleased ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Lock className="w-3 h-3 text-slate-300 shrink-0" />
-                      )}
-                    </div>
-                    <div className="font-bold text-sm tracking-tight text-slate-800">{formatDateLabel(item.date)}</div>
-                    <div className="text-[10px] mt-1 font-semibold">
-                      {isReleased ? (
-                        <span className="text-emerald-700">Available Now</span>
-                      ) : (
-                        <span className="text-slate-400">Scheduled</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+          {!isUnlocked && !isPartiallyUnlocked && (
+            <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>Unlock premium access to start all papers as they release.</span>
             </div>
-          </Card>
-        </div>
-      )}
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {RELEASE_DATES.map((item) => {
+              const isReleased = checkReleased(item.date);
+              return (
+                <div 
+                  key={item.paper} 
+                  className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 ${
+                    isReleased 
+                      ? 'border-emerald-100 bg-emerald-50/45 text-emerald-950 shadow-sm' 
+                      : 'border-slate-100 bg-slate-50/50 text-slate-500'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-65">{item.paper}</span>
+                    {isReleased ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    ) : (
+                      <Lock className="w-3 h-3 text-slate-300 shrink-0" />
+                    )}
+                  </div>
+                  <div className="font-bold text-sm tracking-tight text-slate-800">{formatDateLabel(item.date)}</div>
+                  <div className="text-[10px] mt-1 font-semibold">
+                    {isReleased ? (
+                      <span className="text-emerald-700">Available Now</span>
+                    ) : (
+                      <span className="text-slate-400">Scheduled</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

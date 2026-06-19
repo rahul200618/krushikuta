@@ -427,7 +427,7 @@ function ExamPage() {
         <ExamAuthModal open={showAuthModal} onOpenChange={setShowAuthModal} onSuccess={handleAuthSuccess} />
         <ExamDashboard
           userId={session?.user?.id}
-          userEmail={session?.user?.email}
+          userEmail={session?.user?.email || (userProfile?.email as string)}
           userProfile={userProfile}
           onRequireAuth={() => setShowAuthModal(true)}
         />

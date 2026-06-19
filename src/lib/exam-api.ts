@@ -45,7 +45,8 @@ export const listStudentProfiles = (search?: string) => examApi('list-student-pr
 export const resetStudentDevice = (userId: string) => examApi('reset-student-device', { userId });
 export const changeUserPassword = (userId: string, newPassword: string) => examApi('change-user-password', { userId, newPassword });
 
-export const checkUserAccess = (userId: string, testIds: number[]) => examApi('check-user-access', { userId, testIds });
+export const checkUserAccess = (userId: string, testIds: number[], email?: string) => examApi('check-user-access', { userId, testIds, email });
+export const debugUserAccess = (userId: string, email?: string) => examApi('debug-user-access', { userId, email });
 
 export const submitPaymentRequest = (userEmail: string, utr: string, amount: number) =>
   examApi('submit-payment-request', { userEmail, utr, amount });

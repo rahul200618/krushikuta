@@ -169,7 +169,7 @@ export function UsersManagerPanel() {
     try {
       const [perfRes, accessRes] = await Promise.all([
         getUserPerformance(student.firebase_uid),
-        checkUserAccess(student.firebase_uid, [])
+        checkUserAccess(student.firebase_uid, [], student.email)
       ]);
       setPerformance(perfRes);
       setUserAccessList(accessRes.access || []);
@@ -245,7 +245,7 @@ export function UsersManagerPanel() {
     setSelectedGrantTestId("");
     setLoadingAccessList(true);
     try {
-      const res = await checkUserAccess(student.firebase_uid, []);
+      const res = await checkUserAccess(student.firebase_uid, [], student.email);
       setUserAccessList(res.access || []);
     } catch {
       toast.error("Failed to load user access list");

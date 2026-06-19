@@ -554,6 +554,26 @@ export default async function handler(req, res) {
       }
 
       // ── ADMIN: ACCESS ────────────────────────────────────────
+      case 'debug-user-access': {
+        try {
+          const { userId, email } = payload;
+          const [byId, byEmail, allRecent] = await Promise.all([
+            supabase.from('user_purchases').select('*').eq('user_id', userId),
+            email ? supabase.from('user_purchases').select('*').eq('email', email) : Promise.resolve({ data: [] }),
+            supabase.from('user_purchases').select('*').order('id', { ascending: false }).limit(10)
+          ]);
+          return res.status(200).json({
+            queriedUserId: userId,
+            queriedEmail: email,
+            byUserId: byId.data || [],
+            byEmail: byEmail.data || [],
+            recentPurchases: allRecent.data || [],
+          });
+        } catch (err) {
+          return res.status(200).json({ error: err.message });
+        }
+      }
+
       case 'grant-access': {
         try {
           let { userId, testId, email, amount = 0, paymentMethod = 'Admin Granted' } = payload;
@@ -876,7 +896,9 @@ export default async function handler(req, res) {
 
       case 'check-user-access': {
         try {
-          const { userId, testIds } = payload;
+          const { userId, testIds, email } = payload;
+          
+          // Primary: look up by user_id
           let query = supabase
             .from('user_purchases')
             .select('mock_test_id')
@@ -889,7 +911,32 @@ export default async function handler(req, res) {
           
           const { data, error } = await query;
           if (error) throw error;
-          return res.status(200).json({ access: data.map(d => d.mock_test_id) });
+
+          let accessIds = data.map(d => d.mock_test_id);
+
+          // Fallback: if no access found by user_id, also try by email
+          if (accessIds.length === 0 && email) {
+            let emailQuery = supabase
+              .from('user_purchases')
+              .select('mock_test_id')
+              .eq('email', email)
+              .eq('status', 'active');
+            if (testIds && testIds.length > 0) {
+              emailQuery = emailQuery.in('mock_test_id', testIds);
+            }
+            const { data: emailData } = await emailQuery;
+            if (emailData && emailData.length > 0) {
+              accessIds = emailData.map(d => d.mock_test_id);
+              // Backfill correct user_id to ensure future lookups work
+              await supabase
+                .from('user_purchases')
+                .update({ user_id: userId })
+                .eq('email', email)
+                .eq('status', 'active');
+            }
+          }
+
+          return res.status(200).json({ access: accessIds });
         } catch (err) {
           console.error('[exam-api] check-user-access failed:', err);
           logToFile(`check-user-access error: ${err.message || err}`);

@@ -4,7 +4,7 @@ import { getMockQuestions, startTest, submitTest } from '@/lib/exam-api';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Maximize2, Clock, ChevronLeft, ChevronRight, Send, SkipForward } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, Send, SkipForward } from 'lucide-react';
 
 interface Question {
   id: number; question_text: string; options: string[];
@@ -41,9 +41,9 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasSubmitted = useRef(false);
+  const activeQRef = useRef<HTMLButtonElement | null>(null);
 
   // Load from localStorage or start fresh
   useEffect(() => {
@@ -79,6 +79,10 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
         setTimeElapsed(0);
       } catch { /* silent */ } finally {
         setLoading(false);
+        // Auto-enter fullscreen silently
+        document.documentElement.requestFullscreen?.().then(() => {
+          setIsFullscreen(true);
+        }).catch(() => {});
       }
     };
     init();
@@ -140,12 +144,12 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
     setCurrentIdx(idx);
   };
 
-  const enterFullscreen = () => {
-    document.documentElement.requestFullscreen?.().then(() => {
-      setIsFullscreen(true);
-      setShowFullscreenPrompt(false);
-    }).catch(() => setShowFullscreenPrompt(false));
-  };
+  // Auto-scroll the palette to keep active question in view
+  useEffect(() => {
+    if (activeQRef.current) {
+      activeQRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
+  }, [currentIdx]);
 
   const getQuestionState = (idx: number): QuestionState => {
     if (idx === currentIdx) return 'current';
@@ -179,24 +183,6 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
 
   return (
     <div className="min-h-screen bg-muted/30 flex flex-col">
-      {/* Fullscreen prompt overlay */}
-      {showFullscreenPrompt && !isFullscreen && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-card rounded-2xl p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
-            <Maximize2 className="w-12 h-12 text-primary mx-auto" />
-            <h2 className="text-xl font-bold">Enter Fullscreen</h2>
-            <p className="text-muted-foreground text-sm">For the best exam experience and to minimize distractions, please enter fullscreen mode.</p>
-            <div className="flex gap-3">
-              <Button className="flex-1 gradient-primary" onClick={enterFullscreen}>
-                <Maximize2 className="w-4 h-4 mr-2" /> Enter Fullscreen
-              </Button>
-              <Button variant="outline" className="flex-1" onClick={() => setShowFullscreenPrompt(false)}>
-                Continue Without
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Top bar */}
       <header className="sticky top-0 z-30 bg-slate-100 border-b border-border shadow-sm">
@@ -286,16 +272,44 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
                   </Button>
                 )}
               </div>
+
+              {/* Question palette — mobile only, below nav buttons */}
+              <div className="md:hidden mt-4 pt-3 border-t border-border">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Questions</p>
+                {/* Legend */}
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-[9px] text-muted-foreground">
+                  {(['current', 'answered', 'visited', 'unvisited'] as QuestionState[]).map(s => (
+                    <div key={s} className="flex items-center gap-1">
+                      <div className={`w-4 h-4 rounded border text-[7px] flex items-center justify-center ${stateColors[s]}`}>Q</div>
+                      <span className="capitalize">{s}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-6 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {questions.map((_, idx) => {
+                    const state = getQuestionState(idx);
+                    return (
+                      <button
+                        key={idx}
+                        ref={idx === currentIdx ? activeQRef : null}
+                        onClick={() => handleJump(idx)}
+                        className={`aspect-square rounded-lg border text-xs font-bold flex items-center justify-center transition-all hover:scale-105 ${stateColors[state]}`}
+                      >
+                        {idx + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </main>
 
-        {/* Question Sidebar */}
-        <aside className="w-20 md:w-56 border-l border-border bg-card overflow-y-auto shrink-0 p-3">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 hidden md:block">Questions</p>
-          
+        {/* Question Sidebar — desktop only */}
+        <aside className="hidden md:flex w-56 border-l border-border bg-card overflow-y-auto shrink-0 p-3 flex-col">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Questions</p>
           {/* Legend */}
-          <div className="hidden md:flex flex-col gap-1.5 mb-4 text-[10px] text-muted-foreground">
+          <div className="flex flex-col gap-1.5 mb-4 text-[10px] text-muted-foreground">
             {(['current', 'answered', 'visited', 'unvisited'] as QuestionState[]).map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-5 h-5 rounded border text-[8px] flex items-center justify-center ${stateColors[s]}`}>Q</div>
@@ -303,13 +317,13 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
               </div>
             ))}
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5">
             {questions.map((_, idx) => {
               const state = getQuestionState(idx);
               return (
                 <button
                   key={idx}
+                  ref={idx === currentIdx ? activeQRef : null}
                   onClick={() => handleJump(idx)}
                   className={`w-full aspect-square rounded-lg border text-xs font-bold flex items-center justify-center transition-all hover:scale-105 ${stateColors[state]}`}
                 >

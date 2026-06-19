@@ -5,6 +5,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 const isPlaceholder = !supabaseUrl || supabaseUrl.includes('placeholder-project') || supabaseUrl.includes('placeholder');
 
+console.log('[supabase] Initialized with URL:', supabaseUrl, 'isPlaceholder:', isPlaceholder);
+
 let supabaseClient: any;
 
 if (isPlaceholder) {
