@@ -492,7 +492,7 @@ function PremiumSchedulePage() {
                   No premium subjects available yet.
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                   {paidSubjects.map((subject) => {
                     const isUnlocked = isSubjectUnlocked(subject.category) || isSubjectPartiallyUnlocked(subject.category);
                     
@@ -513,42 +513,39 @@ function PremiumSchedulePage() {
                       <div 
                         key={subject.category} 
                         onClick={handleCardClick}
-                        className="group bg-gradient-to-br from-white via-white to-slate-50/20 rounded-2xl shadow-sm border border-slate-100 hover:border-slate-200 hover:to-emerald-50/10 overflow-hidden hover:shadow-soft hover:-translate-y-0.5 transition-all duration-300 cursor-pointer p-4 sm:p-5 flex items-center justify-between gap-4"
+                        className={`group rounded-2xl shadow-sm border overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 cursor-pointer p-4 sm:p-5 flex flex-col justify-between gap-3 bg-gradient-to-br ${
+                          isUnlocked
+                            ? 'from-white via-white to-emerald-50/20 border-emerald-100 hover:border-emerald-300'
+                            : 'from-white via-white to-slate-50/30 border-slate-100 hover:border-slate-200'
+                        }`}
                       >
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-600 border border-emerald-100/50 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-300">
-                            <Folder className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
-                          </div>
-                          <div>
-                            <h3 className="font-extrabold text-slate-800 text-sm sm:text-base md:text-lg font-serif leading-snug group-hover:text-emerald-700 transition-colors">{subject.category}</h3>
-                            <p className="text-[11px] sm:text-xs text-slate-500 mt-1 font-medium flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              {subject.papers.length} {subject.papers.length === 1 ? 'Mock Test Paper' : 'Mock Test Papers'}
-                            </p>
-                          </div>
+                        {/* Top: name + paper count */}
+                        <div>
+                          <h3 className={`font-extrabold text-sm sm:text-base font-serif leading-snug transition-colors ${
+                            isUnlocked ? 'text-emerald-900 group-hover:text-emerald-700' : 'text-slate-800 group-hover:text-slate-900'
+                          }`}>{subject.category}</h3>
+                          <p className="text-[11px] sm:text-xs text-slate-400 mt-1.5 font-medium flex items-center gap-1.5">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isUnlocked ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                            {subject.papers.length} {subject.papers.length === 1 ? 'Paper' : 'Papers'}
+                          </p>
                         </div>
 
-                        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-                          <Button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCardClick();
-                            }}
-                            size="sm"
-                            className={`text-xs font-bold h-8 rounded-xl px-3.5 shadow-sm transition-all duration-300 flex items-center gap-1 cursor-pointer border ${
-                              isUnlocked 
-                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200' 
-                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
-                            }`}
-                          >
-                            {!isUnlocked && <Lock className="w-3.5 h-3.5 text-amber-600" />}
-                            <span>{isUnlocked ? 'Open' : 'Unlock'}</span>
-                            {isUnlocked && <ArrowRight className="w-3.5 h-3.5 opacity-70 group-hover:translate-x-0.5 transition-transform" />}
-                          </Button>
-                          <div className="text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all duration-300">
-                            <ChevronRight className="w-5 h-5" />
-                          </div>
-                        </div>
+                        {/* Bottom: action button */}
+                        <Button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCardClick();
+                          }}
+                          className={`w-full text-xs font-bold py-2 rounded-xl shadow-sm transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer border ${
+                            isUnlocked 
+                              ? 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/20 text-white border-emerald-600' 
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                          }`}
+                        >
+                          {!isUnlocked && <Lock className="w-3.5 h-3.5" />}
+                          <span>{isUnlocked ? 'Open' : 'Unlock'}</span>
+                          {isUnlocked && <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />}
+                        </Button>
                       </div>
                     );
                   })}
