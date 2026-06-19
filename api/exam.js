@@ -856,8 +856,9 @@ export default async function handler(req, res) {
             }
 
             if (targetUserId) {
+              const grantTestId = testId || (Number(pr.amount) === 2799 ? -2 : -1);
               const { error: grantErr } = await supabase.from('user_purchases').upsert([{
-                user_id: targetUserId, mock_test_id: testId || -1, amount: pr.amount,
+                user_id: targetUserId, mock_test_id: grantTestId, amount: pr.amount,
                 status: 'active', payment_method: 'UPI Verified', granted_by_admin: true, email: pr.user_email
               }], { onConflict: 'user_id,mock_test_id' });
               if (grantErr) throw grantErr;

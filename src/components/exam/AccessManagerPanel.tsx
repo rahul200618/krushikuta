@@ -199,7 +199,8 @@ export function AccessManagerPanel() {
                   <SelectTrigger><SelectValue placeholder="Choose a test..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="-1">🔓 All-Access Bundle (Test ID: -1)</SelectItem>
-                    {tests.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.title} (₹{t.price})</SelectItem>)}
+                    <SelectItem value="-2">🔓 First 6 Paper Releases (Test ID: -2)</SelectItem>
+                    {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => <SelectItem key={t.id} value={String(t.id)}>{t.title} (₹{t.price})</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

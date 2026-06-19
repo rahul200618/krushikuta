@@ -10,6 +10,11 @@ import { toast } from 'sonner';
 
 export const Route = createFileRoute('/ao/aao_/checkout')({
   component: ExamCheckoutPage,
+  validateSearch: (search: Record<string, unknown>) => {
+    return {
+      package: (search.package as 'six_papers' | 'all_papers') || 'all_papers',
+    };
+  },
   head: () => ({ meta: [{ title: 'Checkout — Krishikuta' }] }),
 });
 
@@ -17,12 +22,33 @@ const DEFAULT_QR = "https://placehold.co/300x300?text=Scan+to+Pay+3000";
 
 function ExamCheckoutPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedPackage, setSelectedPackage] = useState<'six_papers' | 'all_papers'>(search.package || 'all_papers');
   const [utr, setUtr] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [qrUrl, setQrUrl] = useState(DEFAULT_QR);
+
+  const PACKAGES = {
+    six_papers: {
+      title: "First 6 Paper Releases",
+      originalPrice: 4000,
+      price: 2799,
+      discount: 1201,
+      description: "Unlock access to the first 6 premium mock test sets (18 papers total)"
+    },
+    all_papers: {
+      title: "All-Access Premium Bundle",
+      originalPrice: 6000,
+      price: 4799,
+      discount: 1201,
+      description: "Unlock absolute lifetime access to all 12 mock test sets (36 papers total)"
+    }
+  };
+
+  const currentPkg = PACKAGES[selectedPackage];
 
   useEffect(() => {
     const init = async () => {
@@ -57,7 +83,7 @@ function ExamCheckoutPage() {
 
     setSubmitting(true);
     try {
-      await submitPaymentRequest(email, utr.trim(), 3000);
+      await submitPaymentRequest(email, utr.trim(), currentPkg.price);
       setDone(true);
       toast.success('Payment details submitted successfully!');
     } catch (err: any) {
@@ -110,24 +136,62 @@ function ExamCheckoutPage() {
           <div className="space-y-6">
             <div>
               <h1 className="text-3xl font-extrabold flex items-center gap-2"><Lock className="w-7 h-7 text-amber-600"/> Unlock Premium</h1>
-              <p className="text-muted-foreground mt-2">Get lifetime access to all mock tests, previous year question papers, and in-depth performance analytics.</p>
+              <p className="text-muted-foreground mt-2 font-medium">Select a premium package below to unlock कर्नाटक's most structured test papers.</p>
+            </div>
+
+            {/* Package Selector */}
+            <div className="space-y-3">
+              <label className="text-sm font-bold text-foreground">Choose Premium Option:</label>
+              
+              <div 
+                onClick={() => setSelectedPackage('six_papers')} 
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-1 relative overflow-hidden ${
+                  selectedPackage === 'six_papers' 
+                    ? 'border-emerald-600 bg-emerald-50/40 shadow-soft' 
+                    : 'border-border bg-white hover:border-emerald-300'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-emerald-950 text-base">{PACKAGES.six_papers.title}</span>
+                  <span className="font-extrabold text-emerald-700 text-lg">₹{PACKAGES.six_papers.price}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{PACKAGES.six_papers.description}</p>
+              </div>
+
+              <div 
+                onClick={() => setSelectedPackage('all_papers')} 
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-1 relative overflow-hidden ${
+                  selectedPackage === 'all_papers' 
+                    ? 'border-emerald-600 bg-emerald-50/40 shadow-soft' 
+                    : 'border-border bg-white hover:border-emerald-300'
+                }`}
+              >
+                <div className="absolute right-0 top-0 bg-emerald-600 text-white text-[9px] uppercase tracking-wider font-extrabold px-3 py-1 rounded-bl-xl">
+                  Recommended
+                </div>
+                <div className="flex justify-between items-center pr-12">
+                  <span className="font-bold text-emerald-950 text-base">{PACKAGES.all_papers.title}</span>
+                  <span className="font-extrabold text-emerald-700 text-lg">₹{PACKAGES.all_papers.price}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{PACKAGES.all_papers.description}</p>
+              </div>
             </div>
             
             <Card className="p-6 border-0 shadow-sm">
               <h2 className="font-bold text-lg mb-4">Order Summary</h2>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between pb-3 border-b border-border">
-                  <span className="text-muted-foreground">All-Access Premium Bundle</span>
-                  <span className="font-semibold line-through text-muted-foreground">₹5,000</span>
+                  <span className="text-muted-foreground">{currentPkg.title}</span>
+                  <span className="font-semibold line-through text-muted-foreground">₹{currentPkg.originalPrice}</span>
                 </div>
                 <div className="flex justify-between pb-3 border-b border-border text-green-600 font-medium">
                   <span>Special Discount</span>
-                  <span>- ₹2,000</span>
+                  <span>- ₹{currentPkg.discount}</span>
                 </div>
                 <div className="flex justify-between items-end pt-2">
                   <span className="font-bold text-lg">Total Amount</span>
                   <div className="text-right">
-                    <span className="text-3xl font-extrabold text-primary">₹3,000</span>
+                    <span className="text-3xl font-extrabold text-primary">₹{currentPkg.price}</span>
                   </div>
                 </div>
               </div>
@@ -155,7 +219,7 @@ function ExamCheckoutPage() {
             ) : (
               <div className="space-y-8">
                 <div className="text-center">
-                  <h3 className="font-bold text-xl mb-1">Scan & Pay via UPI</h3>
+                  <h3 className="font-bold text-xl mb-1">Scan & Pay ₹{currentPkg.price} via UPI</h3>
                   <p className="text-sm text-muted-foreground">Open any UPI app (GPay, PhonePe, Paytm) to scan the code.</p>
                   <div className="mt-6 flex justify-center">
                     <div className="p-2 bg-white border border-gray-200 rounded-2xl shadow-sm">

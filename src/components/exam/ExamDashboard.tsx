@@ -58,7 +58,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
           userId ? getUserPerformance(userId) : Promise.resolve(null),
         ]);
         const allTests: MockTest[] = testsRes.tests || [];
-        setTests(allTests.filter(t => t.is_active));
+        setTests(allTests.filter(t => t.is_active && t.title !== '_SUBJECT_PLACEHOLDER_'));
         setPerformance(perfRes);
 
         if (userId) {
@@ -103,9 +103,16 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
   const filteredTests = activeCategory === 'All' ? tests : tests.filter(t => t.category === activeCategory);
   const firstFreeTest = tests.find(t => t.is_free || t.price === 0);
 
+  const paidTests = tests.filter(t => !t.is_free && t.title !== '_SUBJECT_PLACEHOLDER_').sort((a, b) => a.id - b.id);
+  const first6TestIds = paidTests.slice(0, 6).map(t => t.id);
+
   const getTestStatus = (test: MockTest): 'free' | 'unlocked' | 'paid' => {
     if (test.is_free || test.price === 0) return 'free';
-    if (accessList.includes(test.id) || accessList.includes(-1)) return 'unlocked';
+    if (accessList.includes(test.id) || 
+        accessList.includes(-1) || 
+        (accessList.includes(-2) && first6TestIds.includes(test.id))) {
+      return 'unlocked';
+    }
     return 'paid';
   };
 
@@ -146,8 +153,15 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
 
           <div className="mt-auto pt-2">
             {status === 'paid' ? (
-              <Button disabled className="w-full bg-muted text-muted-foreground border-border" size="sm">
-                <Lock className="w-3.5 h-3.5 mr-2" />Locked
+              <Button 
+                onClick={() => {
+                  if (!userId) onRequireAuth?.();
+                  else navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
+                }}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer" 
+                size="sm"
+              >
+                <Lock className="w-3.5 h-3.5 mr-2" />Unlock Paper
               </Button>
             ) : (
               <Button 
@@ -310,29 +324,35 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         <Card className={`p-6 flex flex-col justify-between gap-4 overflow-hidden relative group transition-all duration-300 ${
           accessList.includes(-1) 
             ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200' 
-            : 'bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200'
+            : accessList.includes(-2)
+              ? 'bg-gradient-to-br from-emerald-50/70 to-blue-50/50 border-emerald-200'
+              : 'bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200'
         }`}>
           <div className={`absolute right-0 bottom-0 w-32 h-32 rounded-full blur-2xl -mr-8 -mb-8 pointer-events-none transition-all duration-700 ${
-            accessList.includes(-1)
+            accessList.includes(-1) || accessList.includes(-2)
               ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20'
               : 'bg-amber-500/10 group-hover:bg-amber-500/20'
           }`} />
           <div className="space-y-2 relative z-10 w-full">
             <h2 className={`text-xl font-extrabold flex items-center gap-2 ${
-              accessList.includes(-1) ? 'text-emerald-950' : 'text-amber-950'
+              accessList.includes(-1) || accessList.includes(-2) ? 'text-emerald-950' : 'text-amber-950'
             }`}>
               {accessList.includes(-1) ? (
                 <><Unlock className="w-5 h-5 text-emerald-600" /> Open All Papers</>
+              ) : accessList.includes(-2) ? (
+                <><Unlock className="w-5 h-5 text-emerald-600" /> Premium Active (6 Papers)</>
               ) : (
                 <><Lock className="w-5 h-5 text-amber-600" /> Get Full Access</>
               )}
             </h2>
             <p className={`text-sm leading-relaxed ${
-              accessList.includes(-1) ? 'text-emerald-800/80' : 'text-amber-800/80'
+              accessList.includes(-1) || accessList.includes(-2) ? 'text-emerald-800/80' : 'text-amber-800/80'
             }`}>
               {accessList.includes(-1) 
                 ? "You have full unrestricted access to all premium tests, previous years' papers, and detailed performance insights." 
-                : "Unlock all 36 premium mock tests, high-yield practice questions, and detailed analytics designed by agricultural specialists."}
+                : accessList.includes(-2)
+                  ? "You have unlocked the first 6 mock test sets (18 papers). Access them on the premium page or upgrade to unlock all 36 papers."
+                  : "Unlock all 36 premium mock tests, high-yield practice questions, and detailed analytics designed by agricultural specialists."}
             </p>
           </div>
           <div className="relative z-10 pt-2 w-full">
@@ -343,6 +363,21 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
               >
                 Open All Papers
               </Button>
+            ) : accessList.includes(-2) ? (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button 
+                  onClick={() => navigate({ to: '/ao/aao/premium' })} 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md px-4 py-2.5 rounded-xl flex-1 cursor-pointer"
+                >
+                  Open Unlocked Papers
+                </Button>
+                <Button 
+                  onClick={() => navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any })} 
+                  className="bg-amber-600 hover:bg-amber-700 text-white shadow-md px-4 py-2.5 rounded-xl flex-1 cursor-pointer"
+                >
+                  Upgrade All-Access
+                </Button>
+              </div>
             ) : pendingPayment ? (
               <Button 
                 onClick={() => navigate({ to: '/ao/aao/checkout' })} 
@@ -354,7 +389,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
               <Button 
                 onClick={() => {
                   if (!userId) onRequireAuth?.();
-                  else navigate({ to: '/ao/aao/premium' });
+                  else navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
                 }} 
                 className="bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer"
               >

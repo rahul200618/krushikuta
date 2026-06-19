@@ -92,6 +92,9 @@ export function UsersManagerPanel() {
   const [accessStudent, setAccessStudent] = useState<StudentProfile | null>(null);
   const [loadingAccessList, setLoadingAccessList] = useState(false);
 
+  const paidTests = tests.filter(t => !t.is_free && t.title !== '_SUBJECT_PLACEHOLDER_').sort((a, b) => a.id - b.id);
+  const first6TestIds = paidTests.slice(0, 6).map(t => t.id);
+
   const handleResetDevice = async (studentId: string) => {
     setResettingDevice(true);
     try {
@@ -658,7 +661,8 @@ export function UsersManagerPanel() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="-1">🔓 All-Access Bundle (Test ID: -1)</SelectItem>
-                            {tests.map(t => (
+                            <SelectItem value="-2">🔓 First 6 Paper Releases (Test ID: -2)</SelectItem>
+                            {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => (
                               <SelectItem key={t.id} value={String(t.id)}>
                                 {t.title} ({t.category})
                               </SelectItem>
@@ -678,38 +682,178 @@ export function UsersManagerPanel() {
                   </div>
 
                   {/* Active Grants List */}
-                  <div className="space-y-2.5 pt-2">
-                    <span className="text-xs font-semibold text-[#5e7a63] block">Active Test Grants ({userAccessList.length})</span>
-                    {userAccessList.length === 0 ? (
-                      <p className="text-xs text-muted-foreground italic bg-[#f4f7f4] p-3 rounded-lg border border-dashed border-[#e0e8e2] text-center">
-                        No manual access grants active for this user.
-                      </p>
-                    ) : (
-                      <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
-                        {userAccessList.map(testId => {
-                          const matchedTest = tests.find(t => t.id === testId);
-                          const title = testId === -1 ? "🔓 All-Access Bundle" : (matchedTest?.title || `Mock Test #${testId}`);
-                          const category = testId === -1 ? "Bundle" : (matchedTest?.category || "General");
-                          return (
-                            <div key={testId} className="flex items-center justify-between p-2 bg-[#f4f7f4] border border-[#e0e8e2] rounded-lg text-xs gap-2">
-                              <div className="truncate flex-1">
-                                <span className="font-semibold text-[#1a3820] block truncate" title={title}>{title}</span>
-                                <span className="text-[10px] text-muted-foreground uppercase">{category}</span>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleRevokeTestAccess(testId)}
-                                disabled={grantingAccess}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2 rounded-lg text-[10px] font-semibold shrink-0 cursor-pointer"
-                              >
-                                Revoke
-                              </Button>
-                            </div>
-                          );
-                        })}
+                  <div className="space-y-3 pt-2">
+                    <span className="text-xs font-bold text-[#1a3820] block">Access Summary</span>
+                    
+                    {/* Bundles Status */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                        userAccessList.includes(-1) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        <div className="font-semibold text-[#1a3820] truncate">All-Access Bundle</div>
+                        <div className="text-[10px] text-muted-foreground">Mock Test ID: -1</div>
+                        {userAccessList.includes(-1) ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRevokeTestAccess(-1)}
+                            disabled={grantingAccess}
+                            className="w-full text-[10px] h-6 mt-1"
+                          >
+                            Revoke Bundle
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              setGrantingAccess(true);
+                              try {
+                                await grantAccess({
+                                  userId: selectedStudent.firebase_uid,
+                                  testId: -1,
+                                  email: selectedStudent.email,
+                                  amount: 0,
+                                  paymentMethod: "Admin Granted"
+                                });
+                                toast.success("All-Access Bundle granted!");
+                                setUserAccessList(prev => [...prev, -1]);
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to grant");
+                              } finally {
+                                setGrantingAccess(false);
+                              }
+                            }}
+                            disabled={grantingAccess}
+                            className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
+                          >
+                            Grant Bundle
+                          </Button>
+                        )}
                       </div>
-                    )}
+
+                      <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                        userAccessList.includes(-2) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        <div className="font-semibold text-[#1a3820] truncate">First 6 Paper Releases</div>
+                        <div className="text-[10px] text-muted-foreground">Mock Test ID: -2</div>
+                        {userAccessList.includes(-2) ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRevokeTestAccess(-2)}
+                            disabled={grantingAccess}
+                            className="w-full text-[10px] h-6 mt-1"
+                          >
+                            Revoke Bundle
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              setGrantingAccess(true);
+                              try {
+                                await grantAccess({
+                                  userId: selectedStudent.firebase_uid,
+                                  testId: -2,
+                                  email: selectedStudent.email,
+                                  amount: 0,
+                                  paymentMethod: "Admin Granted"
+                                });
+                                toast.success("First 6 Paper Releases granted!");
+                                setUserAccessList(prev => [...prev, -2]);
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to grant");
+                              } finally {
+                                setGrantingAccess(false);
+                              }
+                            }}
+                            disabled={grantingAccess}
+                            className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
+                          >
+                            Grant Bundle
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <span className="text-xs font-bold text-[#1a3820] block pt-2">Paper-by-Paper Status</span>
+                    <div className="space-y-1.5 max-h-[200px] overflow-y-auto border border-[#e0e8e2] rounded-xl p-2 bg-slate-50/50">
+                      {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => {
+                        const isFree = t.is_free || t.price === 0;
+                        const isFirst6 = !isFree && first6TestIds.includes(t.id);
+                        
+                        let status: 'free' | 'bundle-all' | 'bundle-6' | 'direct' | 'locked' = 'locked';
+                        if (isFree) status = 'free';
+                        else if (userAccessList.includes(-1)) status = 'bundle-all';
+                        else if (userAccessList.includes(-2) && isFirst6) status = 'bundle-6';
+                        else if (userAccessList.includes(t.id)) status = 'direct';
+                        
+                        return (
+                          <div key={t.id} className="flex items-center justify-between p-2 bg-white border border-[#e0e8e2] rounded-lg text-xs gap-2 shadow-sm">
+                            <div className="truncate flex-1">
+                              <span className="font-semibold text-[#1a3820] block truncate" title={t.title}>{t.title}</span>
+                              <span className="text-[9px] text-muted-foreground uppercase">{t.category}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-1.5">
+                              {status === 'free' && (
+                                <Badge className="bg-emerald-50 text-emerald-700 border-none text-[9px] font-bold">Free</Badge>
+                              )}
+                              {status === 'bundle-all' && (
+                                <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (All)</Badge>
+                              )}
+                              {status === 'bundle-6' && (
+                                <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (6 Pkgs)</Badge>
+                              )}
+                              {status === 'direct' && (
+                                <>
+                                  <Badge className="bg-green-100 text-green-800 border-none text-[9px] font-bold">Unlocked (Direct)</Badge>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleRevokeTestAccess(t.id)}
+                                    disabled={grantingAccess}
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-1.5 rounded text-[9px] font-bold cursor-pointer"
+                                  >
+                                    Revoke
+                                  </Button>
+                                </>
+                              )}
+                              {status === 'locked' && (
+                                <>
+                                  <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] font-bold">Locked</Badge>
+                                  <Button
+                                    size="sm"
+                                    onClick={async () => {
+                                      setGrantingAccess(true);
+                                      try {
+                                        await grantAccess({
+                                          userId: selectedStudent.firebase_uid,
+                                          testId: t.id,
+                                          email: selectedStudent.email,
+                                          amount: 0,
+                                          paymentMethod: "Admin Granted"
+                                        });
+                                        toast.success(`Unlocked ${t.title}`);
+                                        setUserAccessList(prev => [...prev, t.id]);
+                                      } catch (e: any) {
+                                        toast.error(e.message || "Failed to unlock");
+                                      } finally {
+                                        setGrantingAccess(false);
+                                      }
+                                    }}
+                                    disabled={grantingAccess}
+                                    className="bg-[#2c5f34] text-white hover:bg-[#1a3820] h-6 px-1.5 rounded text-[9px] font-bold cursor-pointer"
+                                  >
+                                    Unlock
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -860,7 +1004,8 @@ export function UsersManagerPanel() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="-1">🔓 All-Access Bundle (Test ID: -1)</SelectItem>
-                      {tests.map(t => (
+                      <SelectItem value="-2">🔓 First 6 Paper Releases (Test ID: -2)</SelectItem>
+                      {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => (
                         <SelectItem key={t.id} value={String(t.id)}>
                           {t.title} ({t.category})
                         </SelectItem>
@@ -880,35 +1025,177 @@ export function UsersManagerPanel() {
             </div>
 
             {/* Active List Section */}
-            <div className="space-y-2">
-              <span className="text-xs font-semibold text-[#5e7a63] block">Active Test Grants ({userAccessList.length})</span>
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-[#1a3820] block">Access Summary</span>
+              
+              {/* Bundles Status */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                  userAccessList.includes(-1) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="font-semibold text-[#1a3820] truncate">All-Access Bundle</div>
+                  <div className="text-[10px] text-muted-foreground">Mock Test ID: -1</div>
+                  {userAccessList.includes(-1) ? (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleQuickRevokeAccess(-1)}
+                      disabled={grantingAccess}
+                      className="w-full text-[10px] h-6 mt-1"
+                    >
+                      Revoke Bundle
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        setGrantingAccess(true);
+                        try {
+                          await grantAccess({
+                            userId: accessStudent.firebase_uid,
+                            testId: -1,
+                            email: accessStudent.email,
+                            amount: 0,
+                            paymentMethod: "Admin Granted"
+                          });
+                          toast.success("All-Access Bundle granted!");
+                          setUserAccessList(prev => [...prev, -1]);
+                        } catch (e: any) {
+                          toast.error(e.message || "Failed to grant");
+                        } finally {
+                          setGrantingAccess(false);
+                        }
+                      }}
+                      disabled={grantingAccess}
+                      className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
+                    >
+                      Grant Bundle
+                    </Button>
+                  )}
+                </div>
+
+                <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                  userAccessList.includes(-2) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="font-semibold text-[#1a3820] truncate">First 6 Paper Releases</div>
+                  <div className="text-[10px] text-muted-foreground">Mock Test ID: -2</div>
+                  {userAccessList.includes(-2) ? (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleQuickRevokeAccess(-2)}
+                      disabled={grantingAccess}
+                      className="w-full text-[10px] h-6 mt-1"
+                    >
+                      Revoke Bundle
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        setGrantingAccess(true);
+                        try {
+                          await grantAccess({
+                            userId: accessStudent.firebase_uid,
+                            testId: -2,
+                            email: accessStudent.email,
+                            amount: 0,
+                            paymentMethod: "Admin Granted"
+                          });
+                          toast.success("First 6 Paper Releases granted!");
+                          setUserAccessList(prev => [...prev, -2]);
+                        } catch (e: any) {
+                          toast.error(e.message || "Failed to grant");
+                        } finally {
+                          setGrantingAccess(false);
+                        }
+                      }}
+                      disabled={grantingAccess}
+                      className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
+                    >
+                      Grant Bundle
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <span className="text-xs font-bold text-[#1a3820] block pt-2">Paper-by-Paper Status</span>
               {loadingAccessList ? (
                 <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-[#2c5f34] animate-spin" /></div>
-              ) : userAccessList.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic bg-[#f4f7f4] p-3 rounded-lg border border-dashed border-[#e0e8e2] text-center">
-                  No active test access grants for this user.
-                </p>
               ) : (
-                <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                  {userAccessList.map(testId => {
-                    const matchedTest = tests.find(t => t.id === testId);
-                    const title = testId === -1 ? "🔓 All-Access Bundle" : (matchedTest?.title || `Mock Test #${testId}`);
-                    const category = testId === -1 ? "Bundle" : (matchedTest?.category || "General");
+                <div className="space-y-1.5 max-h-[220px] overflow-y-auto border border-[#e0e8e2] rounded-xl p-2 bg-slate-50/50">
+                  {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => {
+                    const isFree = t.is_free || t.price === 0;
+                    const isFirst6 = !isFree && first6TestIds.includes(t.id);
+                    
+                    let status: 'free' | 'bundle-all' | 'bundle-6' | 'direct' | 'locked' = 'locked';
+                    if (isFree) status = 'free';
+                    else if (userAccessList.includes(-1)) status = 'bundle-all';
+                    else if (userAccessList.includes(-2) && isFirst6) status = 'bundle-6';
+                    else if (userAccessList.includes(t.id)) status = 'direct';
+                    
                     return (
-                      <div key={testId} className="flex items-center justify-between p-2 bg-[#f4f7f4] border border-[#e0e8e2] rounded-lg text-xs gap-2">
+                      <div key={t.id} className="flex items-center justify-between p-2 bg-white border border-[#e0e8e2] rounded-lg text-xs gap-2 shadow-sm">
                         <div className="truncate flex-1">
-                          <span className="font-semibold text-[#1a3820] block truncate" title={title}>{title}</span>
-                          <span className="text-[10px] text-muted-foreground uppercase">{category}</span>
+                          <span className="font-semibold text-[#1a3820] block truncate" title={t.title}>{t.title}</span>
+                          <span className="text-[9px] text-muted-foreground uppercase">{t.category}</span>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleQuickRevokeAccess(testId)}
-                          disabled={grantingAccess}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 h-7 px-2 rounded-lg text-[10px] font-semibold shrink-0 cursor-pointer"
-                        >
-                          Revoke
-                        </Button>
+                        
+                        <div className="flex items-center gap-1.5">
+                          {status === 'free' && (
+                            <Badge className="bg-emerald-50 text-emerald-700 border-none text-[9px] font-bold">Free</Badge>
+                          )}
+                          {status === 'bundle-all' && (
+                            <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (All)</Badge>
+                          )}
+                          {status === 'bundle-6' && (
+                            <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (6 Pkgs)</Badge>
+                          )}
+                          {status === 'direct' && (
+                            <>
+                              <Badge className="bg-green-100 text-green-800 border-none text-[9px] font-bold">Unlocked (Direct)</Badge>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleQuickRevokeAccess(t.id)}
+                                disabled={grantingAccess}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-1.5 rounded text-[9px] font-bold cursor-pointer"
+                              >
+                                Revoke
+                              </Button>
+                            </>
+                          )}
+                          {status === 'locked' && (
+                            <>
+                              <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] font-bold">Locked</Badge>
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  setGrantingAccess(true);
+                                  try {
+                                    await grantAccess({
+                                      userId: accessStudent.firebase_uid,
+                                      testId: t.id,
+                                      email: accessStudent.email,
+                                      amount: 0,
+                                      paymentMethod: "Admin Granted"
+                                    });
+                                    toast.success(`Unlocked ${t.title}`);
+                                    setUserAccessList(prev => [...prev, t.id]);
+                                  } catch (e: any) {
+                                    toast.error(e.message || "Failed to unlock");
+                                  } finally {
+                                    setGrantingAccess(false);
+                                  }
+                                }}
+                                disabled={grantingAccess}
+                                className="bg-[#2c5f34] text-white hover:bg-[#1a3820] h-6 px-1.5 rounded text-[9px] font-bold cursor-pointer"
+                              >
+                                Unlock
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

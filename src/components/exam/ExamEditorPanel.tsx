@@ -46,7 +46,7 @@ export function ExamEditorPanel() {
 
   const [subjectCreateOpen, setSubjectCreateOpen] = useState(false);
   const [subjectCreateForm, setSubjectCreateForm] = useState({
-    subjectName: '', price: '3000', firstPaperTitle: 'Paper 1', description: ''
+    subjectName: '', price: '3000'
   });
 
   const [subjectEditOpen, setSubjectEditOpen] = useState(false);
@@ -125,7 +125,7 @@ export function ExamEditorPanel() {
   };
 
   const openCreatePaidSubject = () => {
-    setSubjectCreateForm({ subjectName: '', price: '3000', firstPaperTitle: 'Paper 1', description: '' });
+    setSubjectCreateForm({ subjectName: '', price: '3000' });
     setSubjectCreateOpen(true);
   };
 
@@ -196,28 +196,23 @@ export function ExamEditorPanel() {
   const handleSavePaidSubject = async (e: React.FormEvent) => {
     e.preventDefault();
     const subName = subjectCreateForm.subjectName.trim();
-    const firstTitle = subjectCreateForm.firstPaperTitle.trim();
-    if (!subName || !firstTitle) {
-      toast.error('Subject Name and First Paper Title are required');
+    if (!subName) {
+      toast.error('Subject Name is required');
       return;
     }
     try {
       const payload = {
-        title: firstTitle,
-        description: subjectCreateForm.description,
+        title: '_SUBJECT_PLACEHOLDER_',
+        description: '_SUBJECT_PLACEHOLDER_',
         category: subName,
         price: parseFloat(subjectCreateForm.price) || 0,
         is_free: false,
-        is_active: true,
-        popup_message: JSON.stringify({
-          released_date: new Date().toLocaleDateString('en-GB'),
-          releasing_date: '-',
-          status: 'RELEASED'
-        })
+        is_active: false,
+        popup_message: null
       };
       const res = await saveMockTest(payload);
       setTests(p => [res.test, ...p]);
-      toast.success(`Paid Subject "${subName}" created with its first paper!`);
+      toast.success(`Paid Subject "${subName}" created successfully!`);
       setSubjectCreateOpen(false);
     } catch (err: any) {
       toast.error(err.message || 'Failed to create subject');
@@ -363,8 +358,8 @@ export function ExamEditorPanel() {
   };
 
   // Grouping structures
-  const freeTests = tests.filter(t => t.is_free || t.price === 0);
-  const paidTests = tests.filter(t => !t.is_free && t.price > 0);
+  const freeTests = tests.filter(t => t.is_free);
+  const paidTests = tests.filter(t => !t.is_free);
 
   // Group paid tests by subject name (category)
   const subjectsMap: Record<string, { category: string; price: number; papers: MockTest[] }> = {};
@@ -372,7 +367,9 @@ export function ExamEditorPanel() {
     if (!subjectsMap[test.category]) {
       subjectsMap[test.category] = { category: test.category, price: test.price, papers: [] };
     }
-    subjectsMap[test.category].papers.push(test);
+    if (test.title !== '_SUBJECT_PLACEHOLDER_') {
+      subjectsMap[test.category].papers.push(test);
+    }
   });
   const paidSubjects = Object.values(subjectsMap);
 
@@ -637,13 +634,13 @@ export function ExamEditorPanel() {
 
       {/* Paid Subject Create Dialog */}
       <Dialog open={subjectCreateOpen} onOpenChange={setSubjectCreateOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Create Paid Subject Bundle</DialogTitle>
-            <DialogDescription>This creates a new Paid Subject (Category) and sets up its first Paper.</DialogDescription>
+            <DialogTitle>Create Paid Subject</DialogTitle>
+            <DialogDescription>This creates a new Paid Subject category bundle with its price.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSavePaidSubject} className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <div className="space-y-1">
                 <Label>Subject Name</Label>
                 <Input value={subjectCreateForm.subjectName} onChange={e => setSubjectCreateForm(p => ({ ...p, subjectName: e.target.value }))} required placeholder="e.g. Horticulture" list="paid-subjects-list" />
@@ -656,17 +653,7 @@ export function ExamEditorPanel() {
                 <Input type="number" value={subjectCreateForm.price} onChange={e => setSubjectCreateForm(p => ({ ...p, price: e.target.value }))} required min={0} placeholder="3000" />
               </div>
             </div>
-            
-            <div className="space-y-1 border-t border-border pt-3">
-              <p className="text-xs font-bold text-amber-700 mb-2">First Paper Details</p>
-              <Label>First Paper Title</Label>
-              <Input value={subjectCreateForm.firstPaperTitle} onChange={e => setSubjectCreateForm(p => ({ ...p, firstPaperTitle: e.target.value }))} required placeholder="e.g. Paper 1: General Crop Husbandry" />
-            </div>
-            <div className="space-y-1">
-              <Label>Paper Description</Label>
-              <Textarea value={subjectCreateForm.description} onChange={e => setSubjectCreateForm(p => ({ ...p, description: e.target.value }))} placeholder="Provide details about the paper..." className="min-h-[60px]" />
-            </div>
-            <Button type="submit" className="w-full gradient-primary">Create Subject & Paper</Button>
+            <Button type="submit" className="w-full gradient-primary">Create Subject</Button>
           </form>
         </DialogContent>
       </Dialog>
