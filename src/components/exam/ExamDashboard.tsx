@@ -357,22 +357,24 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
       </div>
 
       {/* Side-by-side Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Side-by-side Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-6">
         {/* Free Access Card */}
-        <Card className="p-6 bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200 flex flex-col justify-between gap-4 overflow-hidden relative group">
-          <div className="absolute right-0 bottom-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl -mr-8 -mb-8 pointer-events-none group-hover:bg-emerald-500/20 transition-all duration-700" />
-          <div className="space-y-2 relative z-10 w-full">
-            <h2 className="text-xl font-extrabold text-emerald-950 flex items-center gap-2">
-              <Unlock className="w-5 h-5 text-emerald-600" /> Free Practice Papers
+        <Card className="p-4 sm:p-6 bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group">
+          <div className="absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/10 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none group-hover:bg-emerald-500/20 transition-all duration-700" />
+          <div className="space-y-1 sm:space-y-2 relative z-10 w-full">
+            <h2 className="text-sm sm:text-xl font-extrabold text-emerald-950 flex items-center gap-1.5 sm:gap-2 leading-tight">
+              <Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" />
+              <span>Free Practice Papers</span>
             </h2>
-            <p className="text-sm text-emerald-800/80 leading-relaxed">
+            <p className="text-[11px] sm:text-sm text-emerald-800/80 leading-snug sm:leading-relaxed line-clamp-3 sm:line-clamp-none">
               Start practicing immediately with our selection of free mock papers. Practice general agriculture and agronomy papers with no commitment.
             </p>
           </div>
-          <div className="relative z-10 pt-2 w-full">
+          <div className="relative z-10 pt-1 sm:pt-2 w-full">
             <Button 
               onClick={() => setView('free-tests')}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer transition-all duration-200"
             >
               Start Free Papers
             </Button>
@@ -380,31 +382,31 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         </Card>
 
         {/* Premium Access Card */}
-        <Card className={`p-6 flex flex-col justify-between gap-4 overflow-hidden relative group transition-all duration-300 ${
+        <Card className={`p-4 sm:p-6 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group transition-all duration-300 ${
           accessList.includes(-1) 
             ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200' 
             : accessList.includes(-2)
               ? 'bg-gradient-to-br from-emerald-50/70 to-blue-50/50 border-emerald-200'
               : 'bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200'
         }`}>
-          <div className={`absolute right-0 bottom-0 w-32 h-32 rounded-full blur-2xl -mr-8 -mb-8 pointer-events-none transition-all duration-700 ${
+          <div className={`absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none transition-all duration-700 ${
             accessList.includes(-1) || accessList.includes(-2)
               ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20'
               : 'bg-amber-500/10 group-hover:bg-amber-500/20'
           }`} />
-          <div className="space-y-2 relative z-10 w-full">
-            <h2 className={`text-xl font-extrabold flex items-center gap-2 ${
+          <div className="space-y-1 sm:space-y-2 relative z-10 w-full">
+            <h2 className={`text-sm sm:text-xl font-extrabold flex items-center gap-1.5 sm:gap-2 leading-tight ${
               accessList.includes(-1) || accessList.includes(-2) ? 'text-emerald-950' : 'text-amber-950'
             }`}>
               {accessList.includes(-1) ? (
-                <><Unlock className="w-5 h-5 text-emerald-600" /> Open All Papers</>
+                <><Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" /> <span>Open All Papers</span></>
               ) : accessList.includes(-2) ? (
-                <><Unlock className="w-5 h-5 text-emerald-600" /> Premium Active (6 Papers)</>
+                <><Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" /> <span>Premium Active</span></>
               ) : (
-                <><Lock className="w-5 h-5 text-amber-600" /> Get Full Access</>
+                <><Lock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0" /> <span>Get Full Access</span></>
               )}
             </h2>
-            <p className={`text-sm leading-relaxed ${
+            <p className={`text-[11px] sm:text-sm leading-snug sm:leading-relaxed line-clamp-3 sm:line-clamp-none ${
               accessList.includes(-1) || accessList.includes(-2) ? 'text-emerald-800/80' : 'text-amber-800/80'
             }`}>
               {accessList.includes(-1) 
@@ -414,35 +416,35 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
                   : "Unlock all 36 premium mock tests, high-yield practice questions, and detailed analytics designed by agricultural specialists."}
             </p>
           </div>
-          <div className="relative z-10 pt-2 w-full">
+          <div className="relative z-10 pt-1 sm:pt-2 w-full">
             {accessList.includes(-1) ? (
               <Button 
                 onClick={() => navigate({ to: '/ao/aao/premium' })} 
-                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer transition-all duration-200"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer transition-all duration-200"
               >
                 Open All Papers
               </Button>
             ) : accessList.includes(-2) ? (
-              <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex flex-col lg:flex-row gap-1.5 sm:gap-2">
                 <Button 
                   onClick={() => navigate({ to: '/ao/aao/premium' })} 
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md px-4 py-2.5 rounded-xl flex-1 cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl flex-1 cursor-pointer"
                 >
-                  Open Unlocked Papers
+                  Open Papers
                 </Button>
                 <Button 
                   onClick={() => navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any })} 
-                  className="bg-amber-600 hover:bg-amber-700 text-white shadow-md px-4 py-2.5 rounded-xl flex-1 cursor-pointer"
+                  className="bg-amber-600 hover:bg-amber-700 text-white shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl flex-1 cursor-pointer"
                 >
-                  Upgrade All-Access
+                  Upgrade
                 </Button>
               </div>
             ) : pendingPayment ? (
               <Button 
                 onClick={() => navigate({ to: '/ao/aao/checkout' })} 
-                className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 px-6 py-2.5 rounded-xl w-full cursor-pointer"
+                className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer"
               >
-                Verify Payment (Pending)
+                Verify Payment
               </Button>
             ) : (
               <Button 
@@ -450,7 +452,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
                   if (!userId) onRequireAuth?.();
                   else navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
                 }} 
-                className="bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer"
+                className="bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer"
               >
                 Unlock Access
               </Button>
