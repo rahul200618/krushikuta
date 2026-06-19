@@ -333,48 +333,98 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
   const accessibleTests = accessList.includes(-1) ? tests : tests.filter(t => getTestStatus(t) === 'free' || getTestStatus(t) === 'unlocked');
 
   const stats = [
-    { icon: BookOpen, label: 'Tests Available', value: accessibleTests.length, color: 'text-blue-600', bgColor: 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-100/50 dark:border-blue-900/30' },
-    { icon: FileText, label: 'Attempts', value: performance?.totalAttempts ?? 0, color: 'text-green-600', bgColor: 'bg-green-50/80 dark:bg-green-950/40 border-green-100/50 dark:border-green-900/30' },
-    { icon: Trophy, label: 'Total Questions', value: `${accessibleTests.reduce((acc, t) => acc + (t.total_questions ?? 0), 0)}`, color: 'text-purple-600', bgColor: 'bg-purple-50/80 dark:bg-purple-950/40 border-purple-100/50 dark:border-purple-900/30' },
+    { 
+      icon: BookOpen, 
+      label: 'Tests Available', 
+      value: accessibleTests.length, 
+      color: 'text-blue-600 dark:text-blue-400', 
+      bgColor: 'bg-blue-50/80 dark:bg-blue-950/40', 
+      borderColor: 'border-blue-100/70 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700',
+      gradColor: 'from-white via-white to-blue-50/10 dark:from-slate-900 dark:to-blue-950/5'
+    },
+    { 
+      icon: FileText, 
+      label: 'Attempts', 
+      value: performance?.totalAttempts ?? 0, 
+      color: 'text-green-600 dark:text-green-400', 
+      bgColor: 'bg-green-50/80 dark:bg-green-950/40', 
+      borderColor: 'border-green-100/70 dark:border-green-900/30 hover:border-green-300 dark:hover:border-green-700',
+      gradColor: 'from-white via-white to-green-50/10 dark:from-slate-900 dark:to-green-950/5'
+    },
+    { 
+      icon: Trophy, 
+      label: 'Total Questions', 
+      value: `${accessibleTests.reduce((acc, t) => acc + (t.total_questions ?? 0), 0)}`, 
+      color: 'text-purple-600 dark:text-purple-400', 
+      bgColor: 'bg-purple-50/80 dark:bg-purple-950/40', 
+      borderColor: 'border-purple-100/70 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700',
+      gradColor: 'from-white via-white to-purple-50/10 dark:from-slate-900 dark:to-purple-950/5'
+    },
   ];
+
+  const isUnlocked = accessList.includes(-1);
+  const isPartiallyUnlocked = accessList.includes(-2);
+
+  const cardBg = isUnlocked
+    ? "from-indigo-50/70 via-white to-blue-50/30 dark:from-indigo-950/15 dark:via-slate-900 dark:to-blue-950/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700"
+    : isPartiallyUnlocked
+      ? "from-emerald-50/60 via-white to-blue-50/30 dark:from-emerald-950/10 dark:via-slate-900 dark:to-blue-950/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700"
+      : "from-amber-50/70 via-white to-orange-50/20 dark:from-amber-950/15 dark:via-slate-900 dark:to-orange-950/10 border-amber-200/60 dark:border-amber-900/30 hover:border-amber-400 dark:hover:border-amber-600";
+
+  const blurBg = isUnlocked || isPartiallyUnlocked
+    ? "bg-emerald-500/5 group-hover:bg-emerald-500/10"
+    : "bg-amber-500/5 group-hover:bg-amber-500/10";
+
+  const badgeStyles = isUnlocked || isPartiallyUnlocked
+    ? "bg-emerald-100/60 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200/40 dark:border-emerald-900/30"
+    : "bg-amber-100/60 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200/40 dark:border-amber-900/30";
+
+  const premiumTitle = isUnlocked
+    ? "Open All Papers"
+    : isPartiallyUnlocked
+      ? "Premium Active"
+      : "Unlock Premium";
 
   // ── DEFAULT VIEW (DASHBOARD CARDS) ──────────────────────
   return (
     <div className="space-y-8">
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        {stats.map(({ icon: Icon, label, value, color, bgColor }) => (
-          <Card key={label} className="group p-2.5 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-2 sm:gap-4 border-border hover:shadow-soft transition-all duration-300">
-            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 border group-hover:scale-105 transition-transform duration-300 ${bgColor} ${color}`}>
+        {stats.map(({ icon: Icon, label, value, color, bgColor, borderColor, gradColor }) => (
+          <Card key={label} className={`group p-2.5 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-2 sm:gap-4 bg-gradient-to-br ${gradColor} border ${borderColor} hover:shadow-soft transition-all duration-300`}>
+            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-800 group-hover:scale-105 transition-transform duration-300 ${bgColor} ${color}`}>
               <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs text-muted-foreground font-medium leading-tight sm:truncate">{label}</p>
-              <p className="text-sm sm:text-xl font-extrabold mt-0.5 sm:mt-1 leading-none">{value}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold leading-tight sm:truncate">{label}</p>
+              <p className={`text-sm sm:text-xl font-extrabold mt-0.5 sm:mt-1 leading-none ${color}`}>{value}</p>
             </div>
           </Card>
         ))}
       </div>
 
       {/* Side-by-side Cards */}
-      {/* Side-by-side Cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-6">
         {/* Free Access Card */}
-        <Card className="p-4 sm:p-6 bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group">
-          <div className="absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/10 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none group-hover:bg-emerald-500/20 transition-all duration-700" />
-          <div className="space-y-1 sm:space-y-2 relative z-10 w-full">
-            <h2 className="text-sm sm:text-xl font-extrabold text-emerald-950 flex items-center gap-1.5 sm:gap-2 leading-tight">
-              <Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" />
-              <span>Free Practice Papers</span>
-            </h2>
-            <p className="text-[11px] sm:text-sm text-emerald-800/80 leading-snug sm:leading-relaxed line-clamp-3 sm:line-clamp-none">
+        <Card className="p-4 sm:p-6 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 dark:from-emerald-950/15 dark:via-slate-900 dark:to-teal-950/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-md transition-all duration-300 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group rounded-2xl">
+          <div className="absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none group-hover:bg-emerald-500/10 transition-all duration-700" />
+          <div className="space-y-2 relative z-10 w-full">
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-emerald-100/60 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-200/40 dark:border-emerald-900/30 group-hover:scale-105 transition-transform duration-300">
+                <Unlock className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <h2 className="text-xs sm:text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 font-serif leading-tight">
+                Free Practice
+              </h2>
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3 sm:line-clamp-none font-medium">
               Start practicing immediately with our selection of free mock papers. Practice general agriculture and agronomy papers with no commitment.
             </p>
           </div>
           <div className="relative z-10 pt-1 sm:pt-2 w-full">
             <Button 
               onClick={() => setView('free-tests')}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer transition-all duration-200"
+              className="bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
             >
               Start Free Papers
             </Button>
@@ -382,59 +432,44 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         </Card>
 
         {/* Premium Access Card */}
-        <Card className={`p-4 sm:p-6 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group transition-all duration-300 ${
-          accessList.includes(-1) 
-            ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-200' 
-            : accessList.includes(-2)
-              ? 'bg-gradient-to-br from-emerald-50/70 to-blue-50/50 border-emerald-200'
-              : 'bg-gradient-to-br from-amber-50 to-amber-100/50 border-amber-200'
-        }`}>
-          <div className={`absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none transition-all duration-700 ${
-            accessList.includes(-1) || accessList.includes(-2)
-              ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20'
-              : 'bg-amber-500/10 group-hover:bg-amber-500/20'
-          }`} />
-          <div className="space-y-1 sm:space-y-2 relative z-10 w-full">
-            <h2 className={`text-sm sm:text-xl font-extrabold flex items-center gap-1.5 sm:gap-2 leading-tight ${
-              accessList.includes(-1) || accessList.includes(-2) ? 'text-emerald-950' : 'text-amber-950'
-            }`}>
-              {accessList.includes(-1) ? (
-                <><Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" /> <span>Open All Papers</span></>
-              ) : accessList.includes(-2) ? (
-                <><Unlock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0" /> <span>Premium Active</span></>
-              ) : (
-                <><Lock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 shrink-0" /> <span>Get Full Access</span></>
-              )}
-            </h2>
-            <p className={`text-[11px] sm:text-sm leading-snug sm:leading-relaxed line-clamp-3 sm:line-clamp-none ${
-              accessList.includes(-1) || accessList.includes(-2) ? 'text-emerald-800/80' : 'text-amber-800/80'
-            }`}>
-              {accessList.includes(-1) 
+        <Card className={`p-4 sm:p-6 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group hover:shadow-md transition-all duration-300 rounded-2xl border bg-gradient-to-br ${cardBg}`}>
+          <div className={`absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none transition-all duration-700 ${blurBg}`} />
+          <div className="space-y-2 relative z-10 w-full">
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shrink-0 border group-hover:scale-105 transition-transform duration-300 ${badgeStyles}`}>
+                {isUnlocked || isPartiallyUnlocked ? <Unlock className="w-4 h-4 sm:w-5 sm:h-5" /> : <Lock className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </div>
+              <h2 className="text-xs sm:text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 font-serif leading-tight">
+                {premiumTitle}
+              </h2>
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3 sm:line-clamp-none font-medium">
+              {isUnlocked 
                 ? "You have full unrestricted access to all premium tests, previous years' papers, and detailed performance insights." 
-                : accessList.includes(-2)
+                : isPartiallyUnlocked
                   ? "You have unlocked the first 6 mock test sets (18 papers). Access them on the premium page or upgrade to unlock all 36 papers."
                   : "Unlock all 36 premium mock tests, high-yield practice questions, and detailed analytics designed by agricultural specialists."}
             </p>
           </div>
           <div className="relative z-10 pt-1 sm:pt-2 w-full">
-            {accessList.includes(-1) ? (
+            {isUnlocked ? (
               <Button 
                 onClick={() => navigate({ to: '/ao/aao/premium' })} 
-                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer transition-all duration-200"
+                className="bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-600/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
               >
                 Open All Papers
               </Button>
-            ) : accessList.includes(-2) ? (
+            ) : isPartiallyUnlocked ? (
               <div className="flex flex-col lg:flex-row gap-1.5 sm:gap-2">
                 <Button 
                   onClick={() => navigate({ to: '/ao/aao/premium' })} 
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl flex-1 cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 hover:shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-xl flex-1 cursor-pointer font-bold"
                 >
                   Open Papers
                 </Button>
                 <Button 
                   onClick={() => navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any })} 
-                  className="bg-amber-600 hover:bg-amber-700 text-white shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl flex-1 cursor-pointer"
+                  className="bg-amber-600 hover:bg-amber-700 hover:shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-xl flex-1 cursor-pointer font-bold"
                 >
                   Upgrade
                 </Button>
@@ -442,7 +477,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
             ) : pendingPayment ? (
               <Button 
                 onClick={() => navigate({ to: '/ao/aao/checkout' })} 
-                className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer"
+                className="bg-orange-500 hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-500/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
               >
                 Verify Payment
               </Button>
@@ -452,7 +487,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
                   if (!userId) onRequireAuth?.();
                   else navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
                 }} 
-                className="bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-600/20 px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-lg sm:rounded-xl w-full cursor-pointer"
+                className="bg-amber-600 hover:bg-amber-700 hover:shadow-lg hover:shadow-amber-600/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
               >
                 Unlock Access
               </Button>
