@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Trophy, Clock, BookOpen, Lock, Unlock, Loader2, Star, IndianRupee, FileText, ChevronLeft, Folder } from 'lucide-react';
+import { Trophy, Clock, BookOpen, Lock, Unlock, Loader2, Star, IndianRupee, FileText, ChevronLeft, Folder, ChevronRight, CheckCircle2 } from 'lucide-react';
 
 interface MockTest {
   id: number; title: string; description: string; category: string;
@@ -40,6 +40,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
   const [activeCategory, setActiveCategory] = useState('All');
   const [pendingPayment, setPendingPayment] = useState<any>(null);
   const [view, setView] = useState<'default' | 'free-tests'>('default');
+  const [showPremiumOnDashboard, setShowPremiumOnDashboard] = useState(false);
   const navigate = useNavigate();
 
   const formatScore = (val: number | null | undefined, totalQuestions: number) => {
@@ -115,6 +116,64 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
     }
     return 'paid';
   };
+
+  const RELEASE_DATES = [
+    { paper: 'Paper 1', date: '19/06/2026' },
+    { paper: 'Paper 2', date: '22/06/2026' },
+    { paper: 'Paper 3', date: '25/06/2026' },
+    { paper: 'Paper 4', date: '28/06/2026' },
+    { paper: 'Paper 5', date: '01/07/2026' },
+    { paper: 'Paper 6', date: '04/07/2026' },
+    { paper: 'Paper 7', date: '07/07/2026' },
+    { paper: 'Paper 8', date: '10/07/2026' },
+    { paper: 'Paper 9', date: '13/07/2026' },
+    { paper: 'Paper 10', date: '16/07/2026' },
+    { paper: 'Paper 11', date: '20/07/2026' },
+    { paper: 'Paper 12', date: '23/07/2026' }
+  ];
+
+  const checkReleased = (dateStr: string) => {
+    const [d, m, y] = dateStr.split('/').map(Number);
+    const targetDate = new Date(y, m - 1, d);
+    const today = new Date();
+    return today >= targetDate;
+  };
+
+  const formatDateLabel = (dateStr: string) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const [d, m, y] = dateStr.split('/').map(Number);
+    return `${d} ${months[m - 1]} ${y}`;
+  };
+
+  const hasTestAccess = (testId: number) => {
+    return accessList.includes(-1) || 
+           (accessList.includes(-2) && first6TestIds.includes(testId)) || 
+           accessList.includes(testId);
+  };
+
+  const isSubjectUnlocked = (category: string) => {
+    const subjectPapers = tests.filter((t: any) => t.category === category && t.title !== '_SUBJECT_PLACEHOLDER_');
+    if (subjectPapers.length === 0) return false;
+    return subjectPapers.every((p: any) => hasTestAccess(p.id));
+  };
+
+  const isSubjectPartiallyUnlocked = (category: string) => {
+    const subjectPapers = tests.filter((t: any) => t.category === category && t.title !== '_SUBJECT_PLACEHOLDER_');
+    if (subjectPapers.length === 0) return false;
+    const unlockedCount = subjectPapers.filter((p: any) => hasTestAccess(p.id)).length;
+    return unlockedCount > 0 && unlockedCount < subjectPapers.length;
+  };
+
+  const subjectsMap: Record<string, { category: string; price: number; papers: MockTest[] }> = {};
+  tests.forEach(test => {
+    if (!test.is_free) {
+      if (!subjectsMap[test.category]) {
+        subjectsMap[test.category] = { category: test.category, price: test.price, papers: [] };
+      }
+      subjectsMap[test.category].papers.push(test);
+    }
+  });
+  const paidSubjects = Object.values(subjectsMap);
 
   const renderTestCard = (test: MockTest) => {
     const status = getTestStatus(test);
@@ -358,18 +417,18 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
           <div className="relative z-10 pt-2 w-full">
             {accessList.includes(-1) ? (
               <Button 
-                onClick={() => navigate({ to: '/ao/aao/premium' })} 
+                onClick={() => setShowPremiumOnDashboard(!showPremiumOnDashboard)} 
                 className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 px-6 py-2.5 rounded-xl w-full cursor-pointer transition-all duration-200"
               >
-                Open All Papers
+                {showPremiumOnDashboard ? 'Close All Papers' : 'Open All Papers'}
               </Button>
             ) : accessList.includes(-2) ? (
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button 
-                  onClick={() => navigate({ to: '/ao/aao/premium' })} 
+                  onClick={() => setShowPremiumOnDashboard(!showPremiumOnDashboard)} 
                   className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md px-4 py-2.5 rounded-xl flex-1 cursor-pointer"
                 >
-                  Open Unlocked Papers
+                  {showPremiumOnDashboard ? 'Close Unlocked Papers' : 'Open Unlocked Papers'}
                 </Button>
                 <Button 
                   onClick={() => navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any })} 
@@ -399,6 +458,105 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
           </div>
         </Card>
       </div>
+
+      {showPremiumOnDashboard && (
+        <div className="space-y-6 pt-4 animate-in fade-in duration-500">
+          <Card className="p-6 border border-slate-200 shadow-sm bg-white rounded-2xl space-y-4">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-800 font-serif text-lg flex items-center gap-2">
+                <Clock className="w-5 h-5 text-emerald-600" /> Papers Release Calendar
+              </h3>
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1 rounded-full uppercase tracking-wider">
+                12 Dates · 36 Papers
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {RELEASE_DATES.map((item) => {
+                const isReleased = checkReleased(item.date);
+                return (
+                  <div 
+                    key={item.paper} 
+                    className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 ${
+                      isReleased 
+                        ? 'border-emerald-100 bg-emerald-50/45 text-emerald-950 shadow-sm' 
+                        : 'border-slate-100 bg-slate-50/50 text-slate-500'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-65">{item.paper}</span>
+                      {isReleased ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 animate-pulse" />
+                      ) : (
+                        <Lock className="w-3 h-3 text-slate-300 shrink-0" />
+                      )}
+                    </div>
+                    <div className="font-bold text-sm tracking-tight text-slate-800">{formatDateLabel(item.date)}</div>
+                    <div className="text-[10px] mt-1 font-semibold">
+                      {isReleased ? (
+                        <span className="text-emerald-700">Available Now</span>
+                      ) : (
+                        <span className="text-slate-400">Scheduled</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="font-bold text-slate-800 font-serif text-xl">Premium Mock Test Series</h2>
+              <p className="text-xs text-muted-foreground">{paidSubjects.length} subjects available</p>
+            </div>
+
+            <div className="space-y-3">
+              {paidSubjects.map((subject) => {
+                const isUnlocked = isSubjectUnlocked(subject.category) || isSubjectPartiallyUnlocked(subject.category);
+                
+                const handleCardClick = () => {
+                  navigate({ to: '/ao/aao/premium', search: { subject: subject.category } as any });
+                };
+
+                return (
+                  <div 
+                    key={subject.category} 
+                    onClick={handleCardClick}
+                    className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-soft transition-all duration-300 cursor-pointer p-5 flex items-center justify-between gap-4 hover:bg-slate-50/50"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/30 flex items-center justify-center shrink-0">
+                        <Folder className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800 text-base md:text-lg font-serif">{subject.category}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">{subject.papers.length} Mock Test Papers</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCardClick();
+                        }}
+                        size="sm"
+                        className="bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs font-bold h-8 rounded-full px-4 border shadow-sm transition-all"
+                      >
+                        Open
+                      </Button>
+                      <div className="text-slate-400">
+                        <ChevronRight className="w-5 h-5" />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
