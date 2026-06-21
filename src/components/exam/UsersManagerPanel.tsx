@@ -1049,6 +1049,7 @@ export function UsersManagerPanel() {
                     <Button
                       size="sm"
                       onClick={async () => {
+                        if (!accessStudent) return;
                         setGrantingAccess(true);
                         try {
                           await grantAccess({
@@ -1093,6 +1094,7 @@ export function UsersManagerPanel() {
                     <Button
                       size="sm"
                       onClick={async () => {
+                        if (!accessStudent) return;
                         setGrantingAccess(true);
                         try {
                           await grantAccess({
@@ -1171,6 +1173,7 @@ export function UsersManagerPanel() {
                               <Button
                                 size="sm"
                                 onClick={async () => {
+                                  if (!accessStudent) return;
                                   setGrantingAccess(true);
                                   try {
                                     await grantAccess({

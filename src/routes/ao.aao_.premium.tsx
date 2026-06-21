@@ -5,7 +5,7 @@ import { listMockTests, checkUserAccess, getUserPerformance, debugUserAccess, ge
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { ArrowLeft, Loader2, ChevronRight, Calendar, Lock, Unlock, CheckCircle2, Sparkles, ArrowRight, X } from 'lucide-react';
+import { ArrowLeft, Loader2, ChevronRight, Calendar, Lock, Unlock, CheckCircle2, Sparkles, ArrowRight, X, BookOpen } from 'lucide-react';
 import { ExamAuthModal } from '@/components/exam/ExamAuthModal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -753,7 +753,7 @@ function PremiumSchedulePage() {
             <Button 
               onClick={() => {
                 setShowScheduleModal(false);
-                navigate({ to: '/ao/aao/checkout' });
+                navigate({ to: '/ao/aao/checkout', search: { package: 'all_papers' } as any });
               }}
               className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold py-6 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-2 group text-base"
             >

@@ -91,6 +91,96 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
     return urls;
   };
 
+  /**
+   * Parses ALL "N-X" or "N. X" or "N) X" pairs from a string and returns a map.
+   * Handles both comma-separated inline format ("1-B, 2-C, 3-D, ...")
+   * and line-by-line format ("1. A\n2. B\n...").
+   */
+  const extractAnswerPairs = (text: string): Record<string, string> => {
+    const map: Record<string, string> = {};
+    // Match patterns like: 1-B  1.B  1. B  1) B  1)B  (with optional comma/space separators)
+    const re = /\b(\d{1,3})\s*[-\.\)]\s*([A-D])\b/gi;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      map[m[1]] = m[2].toUpperCase();
+    }
+    return map;
+  };
+
+  /**
+   * Detects a trailing answers block at the end of the text.
+   * Supports:
+   *   Line-by-line:  "1. A\n2. B\n3. C"
+   *   Inline:        "1-B, 2-B, 3-C, 4-D, 5-A, ..."  (comma-separated)
+   *
+   * Returns { answerMap, blockStartIndex } where blockStartIndex is the
+   * character index in the original text where the answers section begins.
+   * Returns null if no answers block is detected.
+   */
+  const detectAnswersBlock = (text: string): { map: Record<string, string>; blockStart: number } | null => {
+    const lines = text.split('\n');
+
+    // ── Strategy 1: Line-by-line  (e.g. "1. A" or "1) A" or "1-A") ──────────
+    const lineAnswerRe = /^Q?(\d+)\s*[-\.\)]\s*([A-D])\s*$/i;
+    let answerLineCount = 0;
+    let firstAnswerLineIdx = lines.length;
+    const lineMap: Record<string, string> = {};
+
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const t = lines[i].trim();
+      if (t === '') { firstAnswerLineIdx = i; continue; }
+      const m = t.match(lineAnswerRe);
+      if (m) {
+        lineMap[m[1]] = m[2].toUpperCase();
+        answerLineCount++;
+        firstAnswerLineIdx = i;
+      } else {
+        if (answerLineCount >= 3) break;
+        if (answerLineCount === 0) continue;
+        break;
+      }
+    }
+
+    if (answerLineCount >= 3) {
+      const blockStart = lines.slice(0, firstAnswerLineIdx).join('\n').length;
+      return { map: lineMap, blockStart };
+    }
+
+    // ── Strategy 2: Inline comma-separated (e.g. "1-B, 2-B, 3-C ...") ───────
+    // Look at the last few lines for a dense cluster of "N-X" pairs
+    const tail = lines.slice(-15).join('\n'); // check last 15 lines
+    const inlineMap = extractAnswerPairs(tail);
+    const pairCount = Object.keys(inlineMap).length;
+
+    if (pairCount >= 5) {
+      // Find where this answers section starts in the full text
+      // We look for the first line from the bottom that contains answer pairs
+      let firstInlineIdx = lines.length;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const pairs = extractAnswerPairs(lines[i]);
+        if (Object.keys(pairs).length >= 1) {
+          firstInlineIdx = i;
+        } else if (lines[i].trim() === '') {
+          firstInlineIdx = i; // keep blank separator lines
+        } else {
+          break;
+        }
+      }
+      const blockStart = lines.slice(0, firstInlineIdx).join('\n').length;
+      return { map: inlineMap, blockStart };
+    }
+
+    return null;
+  };
+
+  /**
+   * Strips the trailing answers block from the raw text given the detected blockStart index.
+   */
+  const stripAnswersBlock = (text: string, blockStart: number): string => {
+    return text.slice(0, blockStart).trimEnd();
+  };
+
+
   const parseAndSave = async () => {
     if (!rawText.trim()) { toast.error('Please enter or upload some text'); return; }
     setLoading(true);
@@ -101,8 +191,15 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
         imageUrls = await uploadImagesToStorage(imageFiles);
       }
 
-      // 2. Parse text robustly
-      const normalizedText = '\n' + rawText.trim();
+      // --- Detect if there's a trailing answers block ---
+      const detected = detectAnswersBlock(rawText);
+      const trailingAnswers = detected?.map ?? null;
+      const questionText = detected
+        ? stripAnswersBlock(rawText, detected.blockStart)
+        : rawText;
+
+      // Parse text robustly
+      const normalizedText = '\n' + questionText.trim();
       // Split by Question markers: Q1., 1., Q2., 2., etc. at the start of a line
       const blocks = normalizedText.split(/\n(?=Q?\d+[\.\)])/i).map(b => b.trim()).filter(b => b);
       const parsedQuestions = [];
@@ -110,18 +207,20 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
       for (let i = 0; i < blocks.length; i++) {
         let block = blocks[i];
         
-        // Extract Ans: or Answer:
-        let ansChar = 'A'; // default
+        // Extract inline Ans: or Answer: (old format)
+        let ansChar: string | null = null;
         const ansMatch = block.match(/(?:Ans|Answer)[\s:-]+([A-D])/i);
         if (ansMatch) {
           ansChar = ansMatch[1].toUpperCase();
           block = block.replace(ansMatch[0], ''); // remove from block text
         }
 
-        // Normalize options so they are on newlines (e.g. if A) B) C) D) are on the same line)
-        block = block.replace(/\s+([A-D]\))/gi, '\n$1');
-        block = block.replace(/\s+\(([A-D])\)/gi, '\n($1)');
-        block = block.replace(/\s+([A-D]\.)\s/gi, '\n$1 '); // e.g. " A. Option"
+        // Normalize options so they are on newlines.
+        // Only split at A) B) C) D) when they appear at start-of-string or after
+        // clear whitespace — avoid breaking mid-word brackets like "me)".
+        // We look for: (start OR whitespace of 2+) then A-D then ) or .
+        block = block.replace(/(^|\s{2,})([A-D][\)\.])/gim, '\n$2');
+        block = block.replace(/(^|\s{2,})\(([A-D])\)/gim, '\n($2)');
         
         const lines = block.split('\n').map(l => l.trim()).filter(l => l);
         
@@ -153,6 +252,12 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
           // Ensure we have exactly 4 options
           while (options.length < 4) options.push(`Option ${String.fromCharCode(65 + options.length)}`);
           options = options.slice(0, 4);
+
+          // Priority: inline Ans: > trailing answers block > default 'A'
+          if (!ansChar && trailingAnswers) {
+            ansChar = trailingAnswers[qNumStr] || 'A';
+          }
+          ansChar = ansChar || 'A';
 
           const correctIdx = ['A', 'B', 'C', 'D'].indexOf(ansChar);
 
@@ -195,14 +300,42 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Bulk Upload Questions</DialogTitle>
-          <DialogDescription>
-            Format required: <br/>
-            <code>Q1. What is...?</code><br/>
-            <code>A) Opt1</code><br/>
-            <code>B) Opt2</code><br/>
-            <code>C) Opt3</code><br/>
-            <code>D) Opt4</code><br/>
-            <code>Ans: A</code>
+          <DialogDescription asChild>
+            <div className="text-xs space-y-3 text-muted-foreground">
+              <div>
+                <p className="font-semibold text-foreground mb-1">📌 Format 1 — Answers inline (per question):</p>
+                <code className="block bg-muted rounded p-2 whitespace-pre leading-5">{`Q1. What is...?
+A) Opt1
+B) Opt2
+C) Opt3
+D) Opt4
+Ans: A
+
+Q2. Another question?
+A) ...
+...
+Ans: C`}</code>
+              </div>
+              <div>
+                <p className="font-semibold text-foreground mb-1">📌 Format 2 — All questions first, answers at the end:</p>
+                <code className="block bg-muted rounded p-2 whitespace-pre leading-5">{`Q1. What is...?
+A) Opt1  B) Opt2  C) Opt3  D) Opt4
+
+Q2. Another question?
+A) ...  B) ...  C) ...  D) ...
+
+(all questions up to Q100...)
+
+Answers can be line-by-line:
+1. A
+2. C
+3. B
+
+Or inline/comma-separated:
+1-A, 2-C, 3-B, 4-D, 5-A...`}</code>
+              </div>
+              <p className="text-xs">Both formats are detected automatically.</p>
+            </div>
           </DialogDescription>
         </DialogHeader>
 

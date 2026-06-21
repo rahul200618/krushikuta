@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
-import { Trophy, CheckCircle2, XCircle, Printer, ArrowLeft, TrendingUp, Clock } from 'lucide-react';
+import { Trophy, CheckCircle2, XCircle, Printer, ArrowLeft, TrendingUp, Clock, BookOpen, FileText } from 'lucide-react';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return 'N/A';
@@ -36,6 +36,7 @@ interface ExamScoreReportProps {
 export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [mockTest, setMockTest] = useState<{ title: string; category: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,14 +45,17 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
       try {
         const { data: sub } = await supabase
           .from('exam_submissions')
-          .select('*')
+          .select('*, mock_tests(title, category)')
           .eq('id', submissionId)
           .single();
 
         if (!sub) return;
-        setSubmission(sub);
+        // Extract joined test info then strip it from the submission object
+        const { mock_tests: testInfo, ...subData } = sub as any;
+        setSubmission(subData);
+        if (testInfo) setMockTest(testInfo);
 
-        const qRes = await getMockQuestions(sub.test_id);
+        const qRes = await getMockQuestions(subData.test_id);
         setQuestions(qRes.questions || []);
       } catch { /* silent */ } finally {
         setLoading(false);
@@ -113,8 +117,43 @@ export function ExamScoreReport({ submissionId }: ExamScoreReportProps) {
       {/* Print-only header */}
       <div className="hidden print:block text-center mb-8">
         <h1 className="text-2xl font-bold">Krishikuta — Exam Score Report</h1>
-        <p className="text-sm text-gray-500">Submission #{submissionId} • {new Date(submission.submitted_at).toLocaleString()}</p>
+        {mockTest && (
+          <p className="text-base font-semibold text-gray-700 mt-1">{mockTest.title}</p>
+        )}
+        {mockTest?.category && (
+          <p className="text-sm text-gray-500">Subject / Paper: {mockTest.category}</p>
+        )}
+        <p className="text-sm text-gray-400 mt-1">Submission #{submissionId} • {new Date(submission.submitted_at).toLocaleString()}</p>
       </div>
+
+      {/* Paper / Subject banner — visible on screen */}
+      {mockTest && (
+        <div className="rounded-xl border border-border bg-gradient-to-r from-primary/5 via-background to-primary/5 p-4 flex flex-col sm:flex-row sm:items-center gap-3 print:hidden">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FileText className="w-5 h-5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Paper</p>
+              <p className="font-semibold text-foreground truncate">{mockTest.title}</p>
+            </div>
+          </div>
+          {mockTest.category && (
+            <>
+              <div className="hidden sm:block w-px h-8 bg-border" />
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <BookOpen className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subject</p>
+                  <p className="font-semibold text-foreground">{mockTest.category}</p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
