@@ -209,7 +209,7 @@ export function BulkUploadDialog({ open, onOpenChange, testId, onUploaded }: Bul
         
         // Extract inline Ans: or Answer: (old format)
         let ansChar: string | null = null;
-        const ansMatch = block.match(/(?:Ans|Answer)[\s:-]+([A-D])/i);
+        const ansMatch = block.match(/\b(?:Ans|Answer)\b[\s:-]+([A-D])\b/i);
         if (ansMatch) {
           ansChar = ansMatch[1].toUpperCase();
           block = block.replace(ansMatch[0], ''); // remove from block text

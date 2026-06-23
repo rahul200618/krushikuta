@@ -209,7 +209,10 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
       subjectsMap[test.category].papers.push(test);
     }
   });
-  const paidSubjects = Object.values(subjectsMap);
+  const paidSubjects = Object.values(subjectsMap).sort((a, b) => a.category.localeCompare(b.category));
+  paidSubjects.forEach(sub => {
+    sub.papers.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+  });
 
   const renderTestCard = (test: MockTest) => {
     const status = getTestStatus(test);
@@ -287,7 +290,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
 
   // ── FREE TESTS VIEW ──────────────────────────────────────
   if (view === 'free-tests') {
-    const freeTests = tests.filter(t => t.is_free);
+    const freeTests = tests.filter(t => t.is_free).sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
 
     return (
       <div className="space-y-6">

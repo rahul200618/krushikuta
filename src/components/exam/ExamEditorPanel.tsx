@@ -358,7 +358,7 @@ export function ExamEditorPanel() {
   };
 
   // Grouping structures
-  const freeTests = tests.filter(t => t.is_free);
+  const freeTests = tests.filter(t => t.is_free).sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
   const paidTests = tests.filter(t => !t.is_free);
 
   // Group paid tests by subject name (category)
@@ -371,7 +371,10 @@ export function ExamEditorPanel() {
       subjectsMap[test.category].papers.push(test);
     }
   });
-  const paidSubjects = Object.values(subjectsMap);
+  const paidSubjects = Object.values(subjectsMap).sort((a, b) => a.category.localeCompare(b.category));
+  paidSubjects.forEach(sub => {
+    sub.papers.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+  });
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">

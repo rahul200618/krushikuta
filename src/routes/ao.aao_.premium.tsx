@@ -214,7 +214,10 @@ function PremiumSchedulePage() {
     }
     subjectsMap[test.category].papers.push(test);
   });
-  const paidSubjects = Object.values(subjectsMap);
+  const paidSubjects = Object.values(subjectsMap).sort((a, b) => a.category.localeCompare(b.category));
+  paidSubjects.forEach(sub => {
+    sub.papers.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+  });
 
   const renderSubjectDetailView = (subjectName: string) => {
     const subject = paidSubjects.find(s => s.category === subjectName);
