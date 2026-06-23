@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Trophy, Clock, BookOpen, Lock, Unlock, Loader2, Star, IndianRupee, FileText, ChevronLeft, Folder, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Trophy, Clock, BookOpen, Lock, Unlock, Loader2, Star, IndianRupee, FileText, ChevronLeft, Folder, ChevronRight, CheckCircle2, Sparkles } from 'lucide-react';
 
 interface MockTest {
   id: number; title: string; description: string; category: string;
@@ -541,6 +541,19 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
           </div>
         </Card>
       </div>
+
+      {/* Release Notice Card */}
+      <Card className="p-4 sm:p-5 border border-emerald-100/85 dark:border-emerald-900/30 bg-gradient-to-r from-emerald-50/20 via-teal-50/10 to-transparent dark:from-emerald-950/10 dark:via-teal-950/5 rounded-2xl flex items-center gap-4 hover:shadow-soft transition-all duration-300">
+        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100/50 shadow-sm">
+          <Sparkles className="w-5 h-5 animate-pulse" />
+        </div>
+        <div>
+          <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">More Papers Coming Soon!</h4>
+          <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed font-medium">
+            In addition to the above papers, we will shortly release a few more important papers to boost your preparation.
+          </p>
+        </div>
+      </Card>
 
       {/* Paper Release Calendar — always visible */}
       <div className="space-y-6 pt-2 animate-in fade-in duration-500">
