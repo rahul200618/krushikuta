@@ -27,7 +27,13 @@ import {
   GraduationCap,
   ArrowRight,
   Sparkles,
-  Layers
+  Layers,
+  Share2,
+  Link2,
+  CheckSquare,
+  Square,
+  Search,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -113,12 +119,21 @@ export function ExamEditorPanel() {
     is_active: true,
     released_date: '',
     releasing_date: '-',
-    status: 'RELEASED'
+    status: 'RELEASED',
+    linked_exams: [] as string[]
   });
 
   const [confirmDeleteExam, setConfirmDeleteExam] = useState<string | null>(null);
   const [confirmDeleteSubject, setConfirmDeleteSubject] = useState<{ id: number; name: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'test' | 'question'; id: number } | null>(null);
+
+  // Link / Share Papers modal state
+  const [linkPapersDialogOpen, setLinkPapersDialogOpen] = useState(false);
+  const [linkTargetExam, setLinkTargetExam] = useState<string>('');
+  const [linkTargetSubjectTag, setLinkTargetSubjectTag] = useState<string>('');
+  const [selectedTestIdsToLink, setSelectedTestIdsToLink] = useState<number[]>([]);
+  const [linkSearchQuery, setLinkSearchQuery] = useState('');
+  const [linkFilterSourceExam, setLinkFilterSourceExam] = useState<string>('all');
 
   // Question modals
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
@@ -181,6 +196,43 @@ export function ExamEditorPanel() {
     return AO_AAO_INTERNAL_CATEGORIES.some(c => clean === c || clean.includes('important') || clean.includes('bsc agri') || clean.includes('general knowledge') || clean.includes('general paper') || clean.includes('core papers'));
   };
 
+  const getLinkedExams = (test: MockTest): string[] => {
+    let linked: string[] = [];
+    try {
+      if (test.popup_message && test.popup_message.startsWith('{')) {
+        const parsed = JSON.parse(test.popup_message);
+        if (Array.isArray(parsed.linked_exams)) {
+          linked = parsed.linked_exams;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return linked;
+  };
+
+  const isPaperInExam = (test: MockTest, examId: string, examName: string): boolean => {
+    const linked = getLinkedExams(test);
+    const cleanExamId = examId.toLowerCase().trim();
+    const cleanExamName = examName.toLowerCase().trim();
+
+    if (linked.some(l => {
+      const cleanL = l.toLowerCase().trim();
+      return cleanL === cleanExamId || cleanL === cleanExamName || (cleanExamId.includes('ao') && cleanL.includes('ao'));
+    })) {
+      return true;
+    }
+
+    const cat = (test.category || '').toLowerCase().trim();
+    if (cleanExamId.includes('ao') && (isAoAaoPaper(cat) || cat === 'ao/aao' || cat === 'ao / aao')) {
+      return true;
+    }
+
+    if (cat === cleanExamId || cat === cleanExamName || cat.startsWith(`${cleanExamName}::`) || cat.startsWith(`${cleanExamId}::`)) {
+      return true;
+    }
+
+    return false;
+  };
+
   // 1. Base Default Exam: AO / AAO
   const defaultAoExam: ExamGroup = {
     id: 'AO / AAO',
@@ -216,25 +268,28 @@ export function ExamEditorPanel() {
     }
   });
 
-  // 3. Distribute all real mock test papers
+  const examsList = [defaultAoExam, ...Object.values(customExams)];
+
+  // 3. Distribute all real mock test papers (including multi-exam linked papers)
   tests.forEach(test => {
-    if (test.title === '_SUBJECT_PLACEHOLDER_') return;
+    if (test.title === '_SUBJECT_PLACEHOLDER_' || test.title === '_SUBJECT_SECTION_') return;
 
-    // Check if test explicitly belongs to one of the custom created exams (e.g. AHO/ADH)
-    const matchingCustomCat = Object.keys(customExams).find(
-      catKey => test.category?.toLowerCase().trim() === catKey.toLowerCase().trim()
-    );
-
-    const targetExam = matchingCustomCat ? customExams[matchingCustomCat] : defaultAoExam;
-
-    if (test.is_free || test.price === 0 && (test.category === 'General Paper' || test.category === 'core papers' || test.is_free)) {
-      targetExam.freePapers.push(test);
-    } else {
-      targetExam.paidPapers.push(test);
-    }
+    examsList.forEach(targetExam => {
+      if (isPaperInExam(test, targetExam.id, targetExam.name)) {
+        const isFree = test.is_free || (test.price === 0 && (test.category === 'General Paper' || test.category === 'core papers' || test.is_free));
+        if (isFree) {
+          if (!targetExam.freePapers.some(p => p.id === test.id)) {
+            targetExam.freePapers.push(test);
+          }
+        } else {
+          if (!targetExam.paidPapers.some(p => p.id === test.id)) {
+            targetExam.paidPapers.push(test);
+          }
+        }
+      }
+    });
   });
 
-  const examsList = [defaultAoExam, ...Object.values(customExams)];
   examsList.forEach(e => {
     e.freePapers.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
     e.paidPapers.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
@@ -369,14 +424,22 @@ export function ExamEditorPanel() {
             freeSection.papers.push(paper);
             return;
           }
+          const pTitle = paper.title.toLowerCase();
+          const pCat = (paper.category || '').toLowerCase();
+
           const matchedCustom = customSubjects.find(
-            s => paper.category?.toLowerCase().trim() === s.title.toLowerCase().trim() ||
-                 paper.category?.toLowerCase().trim() === s.categoryTag.toLowerCase().trim()
+            s => pCat === s.title.toLowerCase().trim() ||
+                 pCat === s.categoryTag.toLowerCase().trim() ||
+                 pCat.includes(s.title.toLowerCase()) ||
+                 pTitle.includes(s.title.toLowerCase()) ||
+                 (s.title.toLowerCase().includes('general knowledge') && (pTitle.includes('general knowledge') || pTitle.includes('gk') || pCat.includes('general knowledge') || pCat.includes('gk'))) ||
+                 (s.title.toLowerCase().includes('important') && (pTitle.includes('important') || pCat.includes('important'))) ||
+                 (s.title.toLowerCase().includes('paper i') && (pTitle.includes('paper i') || pCat.includes('paper i'))) ||
+                 (s.title.toLowerCase().includes('paper ii') && (pTitle.includes('paper ii') || pCat.includes('paper ii')))
           );
           if (matchedCustom) {
             matchedCustom.papers.push(paper);
           } else {
-            // Put in first custom or free
             customSubjects[0].papers.push(paper);
           }
         });
@@ -603,6 +666,88 @@ export function ExamEditorPanel() {
     }
   };
 
+  // Handlers for Link / Share Papers Across Exams
+  const openLinkPapersModal = (targetExamName: string, targetSubjectTag?: string) => {
+    setLinkTargetExam(targetExamName);
+    setLinkTargetSubjectTag(targetSubjectTag || '');
+    // Pre-select any papers that are already in this exam
+    const alreadyInExam = tests.filter(t => 
+      t.title !== '_SUBJECT_PLACEHOLDER_' && 
+      t.title !== '_SUBJECT_SECTION_' && 
+      isPaperInExam(t, targetExamName, targetExamName)
+    ).map(t => t.id);
+    setSelectedTestIdsToLink(alreadyInExam);
+    setLinkSearchQuery('');
+    setLinkFilterSourceExam('all');
+    setLinkPapersDialogOpen(true);
+  };
+
+  const handleSaveLinkPapers = async () => {
+    if (!linkTargetExam) return;
+    setLoading(true);
+    try {
+      const allRealPapers = tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_' && t.title !== '_SUBJECT_SECTION_');
+      
+      const papersToUpdate = allRealPapers.filter(t => {
+        const wasIn = isPaperInExam(t, linkTargetExam, linkTargetExam);
+        const shouldBeIn = selectedTestIdsToLink.includes(t.id);
+        return wasIn !== shouldBeIn;
+      });
+
+      if (papersToUpdate.length === 0) {
+        toast.info('No changes to paper links.');
+        setLinkPapersDialogOpen(false);
+        return;
+      }
+
+      const updated = await Promise.all(papersToUpdate.map(async (test) => {
+        let sched: any = { released_date: '', releasing_date: '-', status: 'RELEASED', linked_exams: [] };
+        try {
+          if (test.popup_message && test.popup_message.startsWith('{')) {
+            sched = { ...sched, ...JSON.parse(test.popup_message) };
+          }
+        } catch (e) { /* ignore */ }
+
+        let currentLinked: string[] = Array.isArray(sched.linked_exams) ? [...sched.linked_exams] : [];
+        if (currentLinked.length === 0) {
+          if (test.category) currentLinked.push(test.category);
+          else currentLinked.push('AO / AAO');
+        }
+
+        const shouldBeIn = selectedTestIdsToLink.includes(test.id);
+        if (shouldBeIn) {
+          if (!currentLinked.some(e => e.toLowerCase() === linkTargetExam.toLowerCase())) {
+            currentLinked.push(linkTargetExam);
+          }
+        } else {
+          currentLinked = currentLinked.filter(e => e.toLowerCase() !== linkTargetExam.toLowerCase());
+        }
+
+        const payload = {
+          ...test,
+          popup_message: JSON.stringify({
+            ...sched,
+            linked_exams: currentLinked
+          })
+        };
+        const res = await saveMockTest(payload);
+        return res.test;
+      }));
+
+      setTests(p => p.map(t => {
+        const up = updated.find(x => x.id === t.id);
+        return up ? up : t;
+      }));
+
+      toast.success(`Successfully updated linked papers for ${linkTargetExam}!`);
+      setLinkPapersDialogOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update linked papers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handlers for Papers Creation & Editing
   const openAddPaper = (examName: string, isFree: boolean, defaultPrice: number, defaultCategory?: string) => {
     setEditingPaper(null);
@@ -616,19 +761,24 @@ export function ExamEditorPanel() {
       is_active: true,
       released_date: new Date().toLocaleDateString('en-GB'),
       releasing_date: '-',
-      status: 'RELEASED'
+      status: 'RELEASED',
+      linked_exams: [examName]
     });
     setPaperDialogOpen(true);
   };
 
   const openEditPaper = (paper: MockTest) => {
     setEditingPaper(paper);
-    let sched = { released_date: '', releasing_date: '-', status: 'RELEASED' };
+    let sched: any = { released_date: '', releasing_date: '-', status: 'RELEASED', linked_exams: [] };
     try {
       if (paper.popup_message && paper.popup_message.startsWith('{')) {
-        sched = JSON.parse(paper.popup_message);
+        sched = { ...sched, ...JSON.parse(paper.popup_message) };
       }
     } catch (e) { /* ignore */ }
+
+    const initialLinked = Array.isArray(sched.linked_exams) && sched.linked_exams.length > 0
+      ? sched.linked_exams
+      : [paper.category || 'AO / AAO'];
 
     setPaperForm({
       title: paper.title,
@@ -638,7 +788,10 @@ export function ExamEditorPanel() {
       price: String(paper.price || 0),
       image_url: paper.image_url || '',
       is_active: paper.is_active,
-      ...sched
+      released_date: sched.released_date || '',
+      releasing_date: sched.releasing_date || '-',
+      status: sched.status || 'RELEASED',
+      linked_exams: initialLinked
     });
     setPaperDialogOpen(true);
   };
@@ -658,7 +811,8 @@ export function ExamEditorPanel() {
         popup_message: JSON.stringify({
           released_date: paperForm.released_date,
           releasing_date: paperForm.releasing_date,
-          status: paperForm.status
+          status: paperForm.status,
+          linked_exams: paperForm.linked_exams.length > 0 ? paperForm.linked_exams : [paperForm.category]
         })
       };
       const res = await saveMockTest(payload);
@@ -765,6 +919,14 @@ export function ExamEditorPanel() {
             <Button 
               size="sm" 
               variant="outline"
+              className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold rounded-xl h-9 px-3"
+              onClick={() => openLinkPapersModal(activeExam.name)}
+            >
+              <Share2 className="w-3.5 h-3.5 mr-1" /> 🔗 Link Papers
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
               className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-xs font-bold rounded-xl h-9 px-3"
               onClick={() => openAddPaper(activeExam.name, true, 0, isAoAao ? 'General Paper' : undefined)}
             >
@@ -848,6 +1010,15 @@ export function ExamEditorPanel() {
                         </Button>
                       </>
                     )}
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      className="text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-xl h-8 px-2"
+                      onClick={() => openLinkPapersModal(activeExam.name, sec.categoryTag)}
+                      title="Link papers from other exams into this exam"
+                    >
+                      <Link2 className="w-3.5 h-3.5 mr-1" /> Link Papers
+                    </Button>
                     <Button 
                       size="sm" 
                       variant="outline"
@@ -1347,6 +1518,41 @@ export function ExamEditorPanel() {
                 </div>
               </div>
 
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Share2 className="w-3.5 h-3.5 text-indigo-600" />
+                  Target Exams (Also Show in Other Exam Portals)
+                </Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-2.5 rounded-xl border border-slate-200 bg-slate-50/50">
+                  {examsList.map(ex => {
+                    const isChecked = (paperForm.linked_exams || []).some(
+                      l => l.toLowerCase().trim() === ex.name.toLowerCase().trim() || l.toLowerCase().trim() === ex.id.toLowerCase().trim()
+                    );
+                    return (
+                      <label key={ex.id} className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setPaperForm(p => {
+                              const list = p.linked_exams || [];
+                              if (checked) {
+                                return { ...p, linked_exams: [...list, ex.name] };
+                              } else {
+                                return { ...p, linked_exams: list.filter(x => x.toLowerCase().trim() !== ex.name.toLowerCase().trim() && x.toLowerCase().trim() !== ex.id.toLowerCase().trim()) };
+                              }
+                            });
+                          }}
+                          className="w-3.5 h-3.5 accent-emerald-600 rounded"
+                        />
+                        <span className="truncate">{ex.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="flex items-center gap-3 pt-2">
                 <input 
                   type="checkbox" 
@@ -1364,6 +1570,138 @@ export function ExamEditorPanel() {
                 {editingPaper ? 'Update Paper' : 'Save Paper'}
               </Button>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* LINK / SHARE PAPERS ACROSS EXAMS MODAL */}
+        <Dialog open={linkPapersDialogOpen} onOpenChange={setLinkPapersDialogOpen}>
+          <DialogContent className="max-w-2xl rounded-2xl max-h-[90vh] flex flex-col p-6">
+            <DialogHeader>
+              <DialogTitle className="font-bold text-lg text-slate-900 flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-indigo-600" />
+                Link Papers into {linkTargetExam}
+              </DialogTitle>
+              <DialogDescription>
+                Select papers from other exams (e.g. AO/AAO General Knowledge or Important sets) to also make them available inside {linkTargetExam}.
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Filter and Search */}
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <Input
+                  value={linkSearchQuery}
+                  onChange={e => setLinkSearchQuery(e.target.value)}
+                  placeholder="Search papers by title..."
+                  className="pl-9 h-9 text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="text-xs h-9 rounded-xl font-semibold"
+                  onClick={() => {
+                    const allFiltered = tests.filter(t => 
+                      t.title !== '_SUBJECT_PLACEHOLDER_' && 
+                      t.title !== '_SUBJECT_SECTION_' &&
+                      (!linkSearchQuery.trim() || t.title.toLowerCase().includes(linkSearchQuery.toLowerCase()))
+                    ).map(t => t.id);
+                    const allSelected = allFiltered.every(id => selectedTestIdsToLink.includes(id));
+                    if (allSelected) {
+                      setSelectedTestIdsToLink(p => p.filter(id => !allFiltered.includes(id)));
+                    } else {
+                      setSelectedTestIdsToLink(p => Array.from(new Set([...p, ...allFiltered])));
+                    }
+                  }}
+                >
+                  Select / Deselect Shown
+                </Button>
+              </div>
+            </div>
+
+            {/* Paper List */}
+            <div className="flex-1 overflow-y-auto space-y-2 py-3 pr-1 max-h-[50vh]">
+              {tests
+                .filter(t => t.title !== '_SUBJECT_PLACEHOLDER_' && t.title !== '_SUBJECT_SECTION_')
+                .filter(t => !linkSearchQuery.trim() || t.title.toLowerCase().includes(linkSearchQuery.toLowerCase()) || (t.description && t.description.toLowerCase().includes(linkSearchQuery.toLowerCase())))
+                .map(paper => {
+                  const isSelected = selectedTestIdsToLink.includes(paper.id);
+                  const linked = getLinkedExams(paper);
+                  const isNativeInTarget = (paper.category || '').toLowerCase().trim() === linkTargetExam.toLowerCase().trim();
+
+                  return (
+                    <div
+                      key={paper.id}
+                      onClick={() => {
+                        setSelectedTestIdsToLink(prev => 
+                          prev.includes(paper.id) ? prev.filter(x => x !== paper.id) : [...prev, paper.id]
+                        );
+                      }}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected 
+                          ? 'border-indigo-500 bg-indigo-50/40' 
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border ${
+                          isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'
+                        }`}>
+                          {isSelected && <Check className="w-3.5 h-3.5" />}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-xs text-slate-900">{paper.title}</span>
+                            {paper.is_free ? (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-0 text-[9px] font-bold">Free</Badge>
+                            ) : (
+                              <Badge className="bg-amber-100 text-amber-900 border-0 text-[9px] font-bold">Paid</Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                            Category: {paper.category || 'General'}
+                            {linked.length > 0 && ` • In exams: ${linked.join(', ')}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {isNativeInTarget ? (
+                        <span className="text-[10px] text-emerald-700 bg-emerald-50 font-bold px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                          Native in {linkTargetExam}
+                        </span>
+                      ) : isSelected ? (
+                        <span className="text-[10px] text-indigo-700 bg-indigo-100 font-bold px-2 py-0.5 rounded shrink-0">
+                          Linked to {linkTargetExam}
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-500 font-medium">
+                {selectedTestIdsToLink.length} papers selected for {linkTargetExam}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setLinkPapersDialogOpen(false)} className="rounded-xl text-xs">
+                  Cancel
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleSaveLinkPapers} 
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs px-4"
+                >
+                  Save Linked Papers
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 

@@ -181,6 +181,43 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
     return AO_AAO_INTERNAL_CATEGORIES.some(c => clean === c || clean.includes('important') || clean.includes('bsc agri') || clean.includes('general knowledge') || clean.includes('general paper') || clean.includes('core papers'));
   };
 
+  const getLinkedExams = (test: MockTest): string[] => {
+    let linked: string[] = [];
+    try {
+      if ((test as any).popup_message && (test as any).popup_message.startsWith('{')) {
+        const parsed = JSON.parse((test as any).popup_message);
+        if (Array.isArray(parsed.linked_exams)) {
+          linked = parsed.linked_exams;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return linked;
+  };
+
+  const isPaperInExam = (test: MockTest, examId: string, examName: string): boolean => {
+    const linked = getLinkedExams(test);
+    const cleanExamId = examId.toLowerCase().trim();
+    const cleanExamName = examName.toLowerCase().trim();
+
+    if (linked.some(l => {
+      const cleanL = l.toLowerCase().trim();
+      return cleanL === cleanExamId || cleanL === cleanExamName || (cleanExamId.includes('ao') && cleanL.includes('ao'));
+    })) {
+      return true;
+    }
+
+    const cat = (test.category || '').toLowerCase().trim();
+    if (cleanExamId.includes('ao') && (isAoAaoPaper(cat) || cat === 'ao/aao' || cat === 'ao / aao')) {
+      return true;
+    }
+
+    if (cat === cleanExamId || cat === cleanExamName || cat.startsWith(`${cleanExamName}::`) || cat.startsWith(`${cleanExamId}::`)) {
+      return true;
+    }
+
+    return false;
+  };
+
   // 1. Base Default Exam: AO / AAO
   const defaultAoExam: DynamicExam = {
     id: 'AO / AAO',
@@ -235,57 +272,55 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
     return false;
   };
 
-  // 3. Distribute all real mock test papers
-  tests.forEach(test => {
-    if (test.title === '_SUBJECT_PLACEHOLDER_') return;
-    if (!test.is_active) return;
-
-    const matchingCustomCat = Object.keys(customExams).find(
-      catKey => test.category?.toLowerCase().trim() === catKey.toLowerCase().trim()
-    );
-
-    const targetExam = matchingCustomCat ? customExams[matchingCustomCat] : defaultAoExam;
-
-    targetExam.papers.push(test);
-    if (isPaperFree(test)) {
-      targetExam.freeCount++;
-    } else {
-      targetExam.paidCount++;
-    }
-  });
-
   const dynamicExamsList = [defaultAoExam, ...Object.values(customExams)];
 
-  const hasTestAccess = (test: MockTest) => {
-    if (isPaperFree(test)) return true;
-    if (accessList.includes(-1)) return true;
-    
-    const matchingCustomCat = Object.keys(customExams).find(
-      catKey => test.category?.toLowerCase().trim() === catKey.toLowerCase().trim()
-    );
+  // 3. Distribute all real mock test papers (including multi-exam linked papers)
+  tests.forEach(test => {
+    if (test.title === '_SUBJECT_PLACEHOLDER_' || test.title === '_SUBJECT_SECTION_') return;
+    if (!test.is_active) return;
 
-    if (!matchingCustomCat) {
+    dynamicExamsList.forEach(targetExam => {
+      if (isPaperInExam(test, targetExam.id, targetExam.shortTitle)) {
+        if (!targetExam.papers.some(p => p.id === test.id)) {
+          targetExam.papers.push(test);
+          if (isPaperFree(test) || test.is_free || test.price === 0) {
+            targetExam.freeCount++;
+          } else {
+            targetExam.paidCount++;
+          }
+        }
+      }
+    });
+  });
+
+  const hasTestAccess = (test: MockTest) => {
+    if (isPaperFree(test) || test.is_free || test.price === 0) return true;
+    if (accessList.includes(-1)) return true;
+    if (accessList.includes(test.id)) return true;
+
+    // Check if user has access to ANY of the exams this test is linked to
+    if (isPaperInExam(test, 'AO / AAO', 'AO / AAO')) {
       if (accessList.includes(-101) || (accessList.includes(-2) && first6TestIds.includes(test.id))) {
         return true;
       }
-    } else {
-      const customExam = customExams[matchingCustomCat];
-      if (customExam.placeholderTestId && accessList.includes(customExam.placeholderTestId)) {
-        return true;
-      }
-      if (matchingCustomCat.toLowerCase().includes('aho') && accessList.includes(-102)) {
-        return true;
+    }
+
+    for (const customExam of Object.values(customExams)) {
+      if (isPaperInExam(test, customExam.id, customExam.shortTitle)) {
+        if (customExam.placeholderTestId && accessList.includes(customExam.placeholderTestId)) {
+          return true;
+        }
+        if (customExam.id.toLowerCase().includes('aho') && accessList.includes(-102)) {
+          return true;
+        }
       }
     }
 
-    if (accessList.includes(test.id)) {
-      return true;
-    }
     return false;
   };
 
   const getTestStatus = (test: MockTest): 'free' | 'unlocked' | 'paid' => {
-    if (isPaperFree(test)) return 'free';
+    if (isPaperFree(test) || test.is_free || test.price === 0) return 'free';
     if (hasTestAccess(test)) return 'unlocked';
     return 'paid';
   };
@@ -422,10 +457,18 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
             freeSection.papers.push(paper);
             return;
           }
+          const pTitle = paper.title.toLowerCase();
+          const pCat = (paper.category || '').toLowerCase();
+
           const matchedCustom = customSections.find(
-            s => paper.category?.toLowerCase().trim() === s.title.toLowerCase().trim() ||
-                 paper.category?.toLowerCase().trim() === `${exam.shortTitle}::${s.title}`.toLowerCase().trim() ||
-                 paper.category?.toLowerCase().includes(s.title.toLowerCase())
+            s => pCat === s.title.toLowerCase().trim() ||
+                 pCat === s.title.toLowerCase().trim() ||
+                 pCat.includes(s.title.toLowerCase()) ||
+                 pTitle.includes(s.title.toLowerCase()) ||
+                 (s.title.toLowerCase().includes('general knowledge') && (pTitle.includes('general knowledge') || pTitle.includes('gk') || pCat.includes('general knowledge') || pCat.includes('gk'))) ||
+                 (s.title.toLowerCase().includes('important') && (pTitle.includes('important') || pCat.includes('important'))) ||
+                 (s.title.toLowerCase().includes('paper i') && (pTitle.includes('paper i') || pCat.includes('paper i'))) ||
+                 (s.title.toLowerCase().includes('paper ii') && (pTitle.includes('paper ii') || pCat.includes('paper ii')))
           );
           if (matchedCustom) {
             matchedCustom.papers.push(paper);
