@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ExamTestInterface } from "@/components/exam/ExamTestInterface";
-import { getProfile } from "@/lib/exam-api";
+import { getProfile, listMockTests, checkUserAccess } from "@/lib/exam-api";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { verifyDeviceLock } from "@/lib/device-lock";
@@ -22,31 +22,104 @@ function ActiveTestPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuthAndAccess = async () => {
+      setLoading(true);
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         toast.error("Please sign in to take the test");
         navigate({ to: "/ao/aao" });
         return;
       }
+      
+      const user = data.session.user;
       setSession(data.session);
+
       try {
-        const res = await getProfile(data.session.user.id);
-        setUserProfile(res.profile);
-        if (res.profile) {
-          const lockRes = await verifyDeviceLock(data.session.user.id, res.profile);
+        const [profileRes, testsRes] = await Promise.all([
+          getProfile(user.id),
+          listMockTests(),
+        ]);
+
+        const profile = profileRes?.profile;
+        setUserProfile(profile);
+
+        if (profile) {
+          const lockRes = await verifyDeviceLock(user.id, profile);
           if (lockRes.locked) {
             toast.error("Access Denied: This account is locked to another device.");
             navigate({ to: "/ao/aao" });
             return;
           }
         }
-      } catch { } finally {
+
+        const targetTestId = Number(testId);
+        const allTests = testsRes?.tests || [];
+        const currentTest = allTests.find((t: any) => t.id === targetTestId);
+
+        const isPaperFree = (test: any) => {
+          if (!test) return false;
+          const title = (test.title || '').toLowerCase().trim();
+          const cat = (test.category || '').toLowerCase().trim();
+          if (
+            title.includes('paper -i (general knowledge)') ||
+            title.includes('paper-ii (bsc agri graduates)') ||
+            (cat === 'general paper' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0')) ||
+            (cat === 'core papers' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0'))
+          ) {
+            return true;
+          }
+          return false;
+        };
+
+        if (currentTest && !isPaperFree(currentTest)) {
+          // Check purchases for user
+          const { data: purchaseRows } = await supabase
+            .from('user_purchases')
+            .select('mock_test_id')
+            .eq('user_id', user.id)
+            .eq('status', 'active');
+
+          let accessList = (purchaseRows || []).map((r: any) => r.mock_test_id);
+
+          const email = user.email || (profile?.email as string);
+          if (accessList.length === 0 && email) {
+            try {
+              const accessRes = await checkUserAccess(user.id, [], email);
+              if (accessRes?.access) {
+                accessList = accessRes.access;
+              }
+            } catch (e) {
+              console.error('[ActiveTestPage] Access check error:', e);
+            }
+          }
+
+          const matchingCustomCat = currentTest.category?.trim();
+          const placeholderTest = allTests.find(
+            (t: any) => t.title === '_SUBJECT_PLACEHOLDER_' && t.category?.toLowerCase().trim() === matchingCustomCat?.toLowerCase()
+          );
+
+          const hasAccess =
+            accessList.includes(-1) ||
+            accessList.includes(-101) ||
+            accessList.includes(targetTestId) ||
+            (placeholderTest && accessList.includes(placeholderTest.id)) ||
+            (matchingCustomCat?.toLowerCase().includes('aho') && accessList.includes(-102));
+
+          if (!hasAccess) {
+            toast.error("Access Denied: Please unlock or purchase this test series to attend.");
+            navigate({ to: "/ao/aao/premium", search: { show_pricing: true } as any });
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('[ActiveTestPage] Check error:', err);
+      } finally {
         setLoading(false);
       }
     };
-    checkAuth();
-  }, [navigate]);
+
+    checkAuthAndAccess();
+  }, [testId, navigate]);
 
   if (loading) {
     return (

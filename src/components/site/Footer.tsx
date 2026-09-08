@@ -12,7 +12,7 @@ export function Footer() {
   };
 
   return (
-    <footer className="bg-foreground text-background mt-20">
+    <footer className="bg-foreground text-background">
       <div className="container-px mx-auto max-w-7xl py-16 grid gap-10 md:grid-cols-2 lg:grid-cols-4">
         <div>
           <div className="flex items-center -ml-2 md:-ml-4">

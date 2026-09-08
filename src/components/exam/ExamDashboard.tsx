@@ -1,21 +1,49 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
-import { listMockTests, getUserPerformance, listUserAccess, checkUserAccess } from '@/lib/exam-api';
+import { useNavigate } from '@tanstack/react-router';
+import { listMockTests, getUserPerformance, checkUserAccess } from '@/lib/exam-api';
 import { supabase } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
-import { Trophy, Clock, BookOpen, Lock, Unlock, Loader2, Star, IndianRupee, FileText, ChevronLeft, Folder, ChevronRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { 
+  Trophy, 
+  Clock, 
+  BookOpen, 
+  Lock, 
+  Unlock, 
+  Loader2, 
+  Star, 
+  FileText, 
+  ChevronLeft, 
+  ChevronDown,
+  CheckCircle2, 
+  ArrowRight,
+  ShieldCheck,
+  Search
+} from 'lucide-react';
 
 interface MockTest {
-  id: number; title: string; description: string; category: string;
-  price: number; image_url?: string; is_active: boolean; is_free?: boolean;
+  id: number; 
+  title: string; 
+  description: string; 
+  category: string;
+  price: number; 
+  image_url?: string; 
+  is_active: boolean; 
+  is_free?: boolean;
 }
 
 interface Performance {
-  totalAttempts: number; averageScore: number; bestScore: number;
-  submissions: Array<{ id: number; score: number; total_questions: number; submitted_at: string; mock_tests?: { title: string; category: string } }>;
+  totalAttempts: number; 
+  averageScore: number; 
+  bestScore: number;
+  submissions: Array<{ 
+    id: number; 
+    score: number; 
+    total_questions: number; 
+    submitted_at: string; 
+    mock_tests?: { title: string; category: string } 
+  }>;
 }
 
 interface ExamDashboardProps {
@@ -23,24 +51,35 @@ interface ExamDashboardProps {
   userEmail?: string;
   userProfile?: Record<string, any> | null;
   onRequireAuth?: () => void;
+  domainFilter?: string;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'Practical Exam': '#16a34a',
-  'General': '#2563eb',
-  'AO/AAO': '#d97706',
-  'ICAR': '#7c3aed',
-};
+interface DynamicExam {
+  id: string;
+  name: string;
+  shortTitle: string;
+  designation: string;
+  description: string;
+  price: number;
+  papers: MockTest[];
+  freeCount: number;
+  paidCount: number;
+  isUnlocked: boolean;
+}
 
-export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }: ExamDashboardProps) {
+export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, domainFilter }: ExamDashboardProps) {
   const [tests, setTests] = useState<MockTest[]>([]);
   const [performance, setPerformance] = useState<Performance | null>(null);
   const [accessList, setAccessList] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [pendingPayment, setPendingPayment] = useState<any>(null);
-  const [view, setView] = useState<'default' | 'free-tests'>('default');
-  const [showPremiumOnDashboard, setShowPremiumOnDashboard] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(() => {
+    if (domainFilter === 'AO/AAO') return 'AO / AAO';
+    if (domainFilter === 'AHO/ADH') return 'AHO / ADH';
+    return null;
+  });
+  const [paperFilterTab, setPaperFilterTab] = useState<'all' | 'free' | 'paid'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedSectionIds, setExpandedSectionIds] = useState<string[]>(['free', 'important', 'bsc_agri', 'gk']);
   const navigate = useNavigate();
 
   const formatScore = (val: number | null | undefined, totalQuestions: number) => {
@@ -51,6 +90,17 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
   };
 
   useEffect(() => {
+    if (selectedSubject) {
+      document.body.classList.add('hide-site-header');
+    } else {
+      document.body.classList.remove('hide-site-header');
+    }
+    return () => {
+      document.body.classList.remove('hide-site-header');
+    };
+  }, [selectedSubject]);
+
+  useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
@@ -59,55 +109,30 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
           userId ? getUserPerformance(userId) : Promise.resolve(null),
         ]);
         const allTests: MockTest[] = testsRes.tests || [];
-        setTests(allTests.filter(t => t.is_active && t.title !== '_SUBJECT_PLACEHOLDER_'));
+        setTests(allTests);
         setPerformance(perfRes);
 
         if (userId) {
-          // Query user_purchases directly with user's own session (bypasses RLS correctly)
-          const { data: purchaseRows, error: purchaseErr } = await supabase
+          const { data: purchaseRows } = await supabase
             .from('user_purchases')
             .select('mock_test_id')
             .eq('user_id', userId)
             .eq('status', 'active');
 
-          if (purchaseErr) {
-            console.error('[ExamDashboard] Error checking purchases by user_id:', purchaseErr);
-          }
-
           let access = (purchaseRows || []).map((r: any) => r.mock_test_id);
 
-          // Fallback: query backend API to check by email and backfill (bypasses RLS)
           if (access.length === 0 && userEmail) {
-            console.log('[ExamDashboard] Direct access list empty. Querying backend by email:', userEmail);
             try {
               const res = await checkUserAccess(userId, [], userEmail);
               if (res && res.access && res.access.length > 0) {
                 access = res.access;
-                console.log('[ExamDashboard] Backend check-user-access found purchases by email:', access);
               }
             } catch (e) {
-              console.error('[ExamDashboard] Failed to check user access via backend API:', e);
+              console.error('[ExamDashboard] Access check error:', e);
             }
           }
 
-          console.log('[ExamDashboard] Loaded access list:', access, 'for user:', userId, userEmail);
-          if (access.length > 0) {
-            setAccessList(access);
-          } else {
-            setAccessList([]);
-          }
-
-          if (userEmail) {
-            const { data, error: payErr } = await supabase.from('payment_requests').select('*').eq('user_email', userEmail).order('created_at', { ascending: false }).limit(1);
-            if (payErr) {
-              console.error('[ExamDashboard] Error checking payment requests:', payErr);
-            }
-            if (data && data.length > 0 && data[0].status === 'pending') {
-              setPendingPayment(data[0]);
-            } else {
-              setPendingPayment(null);
-            }
-          }
+          setAccessList(access);
         }
       } catch (err) {
         console.error('[ExamDashboard] General load error:', err);
@@ -123,10 +148,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'user_purchases', filter: `user_id=eq.${userId}` },
-          () => {
-            // Re-fetch when access changes
-            load();
-          }
+          () => { load(); }
         )
         .subscribe();
     }
@@ -134,479 +156,598 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth }:
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, userEmail]);
 
-  const categories = ['All', ...Array.from(new Set(tests.map(t => t.category).filter(Boolean)))];
-  const filteredTests = activeCategory === 'All' ? tests : tests.filter(t => t.category === activeCategory);
-  const firstFreeTest = tests.find(t => t.is_free);
-
-  const paidTests = tests.filter(t => !t.is_free && t.title !== '_SUBJECT_PLACEHOLDER_').sort((a, b) => a.id - b.id);
+  const paidTests = tests.filter(t => !t.is_free && t.price > 0 && t.title !== '_SUBJECT_PLACEHOLDER_').sort((a, b) => a.id - b.id);
   const first6TestIds = paidTests.slice(0, 6).map(t => t.id);
 
-  const getTestStatus = (test: MockTest): 'free' | 'unlocked' | 'paid' => {
-    if (test.is_free) return 'free';
-    if (accessList.includes(test.id) || 
-        accessList.includes(-1) || 
-        (accessList.includes(-2) && first6TestIds.includes(test.id))) {
-      return 'unlocked';
+  // ── GROUPING LOGIC ──────────────────────────────────────────
+  const AO_AAO_INTERNAL_CATEGORIES = [
+    'ao/aao',
+    'ao / aao',
+    'important papers',
+    'bsc agri(85%)-paper ii',
+    'bsc agri',
+    'general knowledge-paper i',
+    'general paper',
+    'core papers',
+    'general',
+    'practical exam'
+  ];
+
+  const isAoAaoPaper = (cat?: string) => {
+    if (!cat) return true;
+    const clean = cat.toLowerCase().trim();
+    return AO_AAO_INTERNAL_CATEGORIES.some(c => clean === c || clean.includes('important') || clean.includes('bsc agri') || clean.includes('general knowledge') || clean.includes('general paper') || clean.includes('core papers'));
+  };
+
+  // 1. Base Default Exam: AO / AAO
+  const defaultAoExam: DynamicExam = {
+    id: 'AO / AAO',
+    name: 'AO / AAO Preparation',
+    shortTitle: 'AO / AAO',
+    designation: 'Agriculture Officer & Assistant Officer',
+    description: 'Comprehensive CBT Mock Series for KPSC & State Agriculture Officer recruitment with instant score & state-level percentile.',
+    price: 3000,
+    papers: [],
+    freeCount: 0,
+    paidCount: 0,
+    isUnlocked: accessList.includes(-1) || accessList.includes(-101)
+  };
+
+  // 2. Custom created exams (from _SUBJECT_PLACEHOLDER_)
+  const customExams: Record<string, DynamicExam> = {};
+
+  tests.forEach(test => {
+    if (test.title === '_SUBJECT_PLACEHOLDER_') {
+      const cat = test.category?.trim();
+      if (cat && !isAoAaoPaper(cat)) {
+        customExams[cat] = {
+          id: cat,
+          name: `${cat} Preparation`,
+          shortTitle: cat,
+          designation: test.description && test.description !== '_SUBJECT_PLACEHOLDER_' ? test.description : 'Competitive Mock Test Series',
+          description: test.description && test.description !== '_SUBJECT_PLACEHOLDER_' ? test.description : 'Comprehensive Computer Based Test series with real exam simulation and ranking.',
+          price: test.price || 3000,
+          papers: [],
+          freeCount: 0,
+          paidCount: 0,
+          placeholderTestId: test.id,
+          isUnlocked: accessList.includes(-1) || accessList.includes(test.id) || (cat.toLowerCase().includes('aho') && accessList.includes(-102))
+        };
+      }
     }
+  });
+
+  const isPaperFree = (test: MockTest) => {
+    const title = (test.title || '').toLowerCase().trim();
+    const cat = (test.category || '').toLowerCase().trim();
+
+    // Strictly the 2 official free practice papers:
+    if (
+      title.includes('paper -i (general knowledge)') ||
+      title.includes('paper-ii (bsc agri graduates)') ||
+      (cat === 'general paper' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0')) ||
+      (cat === 'core papers' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0'))
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  // 3. Distribute all real mock test papers
+  tests.forEach(test => {
+    if (test.title === '_SUBJECT_PLACEHOLDER_') return;
+    if (!test.is_active) return;
+
+    const matchingCustomCat = Object.keys(customExams).find(
+      catKey => test.category?.toLowerCase().trim() === catKey.toLowerCase().trim()
+    );
+
+    const targetExam = matchingCustomCat ? customExams[matchingCustomCat] : defaultAoExam;
+
+    targetExam.papers.push(test);
+    if (isPaperFree(test)) {
+      targetExam.freeCount++;
+    } else {
+      targetExam.paidCount++;
+    }
+  });
+
+  const dynamicExamsList = [defaultAoExam, ...Object.values(customExams)];
+
+  const hasTestAccess = (test: MockTest) => {
+    if (isPaperFree(test)) return true;
+    if (accessList.includes(-1)) return true;
+    
+    const matchingCustomCat = Object.keys(customExams).find(
+      catKey => test.category?.toLowerCase().trim() === catKey.toLowerCase().trim()
+    );
+
+    if (!matchingCustomCat) {
+      if (accessList.includes(-101) || (accessList.includes(-2) && first6TestIds.includes(test.id))) {
+        return true;
+      }
+    } else {
+      const customExam = customExams[matchingCustomCat];
+      if (customExam.placeholderTestId && accessList.includes(customExam.placeholderTestId)) {
+        return true;
+      }
+      if (matchingCustomCat.toLowerCase().includes('aho') && accessList.includes(-102)) {
+        return true;
+      }
+    }
+
+    if (accessList.includes(test.id)) {
+      return true;
+    }
+    return false;
+  };
+
+  const getTestStatus = (test: MockTest): 'free' | 'unlocked' | 'paid' => {
+    if (isPaperFree(test)) return 'free';
+    if (hasTestAccess(test)) return 'unlocked';
     return 'paid';
   };
 
-  const RELEASE_DATES = [
-    { paper: 'Paper 1', date: '19/06/2026' },
-    { paper: 'Paper 2', date: '22/06/2026' },
-    { paper: 'Paper 3', date: '25/06/2026' },
-    { paper: 'Paper 4', date: '28/06/2026' },
-    { paper: 'Paper 5', date: '01/07/2026' },
-    { paper: 'Paper 6', date: '04/07/2026' },
-    { paper: 'Paper 7', date: '07/07/2026' },
-    { paper: 'Paper 8', date: '10/07/2026' },
-    { paper: 'Paper 9', date: '13/07/2026' },
-    { paper: 'Paper 10', date: '16/07/2026' },
-    { paper: 'Paper 11', date: '20/07/2026' },
-    { paper: 'Paper 12', date: '23/07/2026' }
-  ];
-
-  const checkReleased = (dateStr: string) => {
-    const [d, m, y] = dateStr.split('/').map(Number);
-    const targetDate = new Date(y, m - 1, d);
-    const today = new Date();
-    return today >= targetDate;
-  };
-
-  const formatDateLabel = (dateStr: string) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const [d, m, y] = dateStr.split('/').map(Number);
-    return `${d} ${months[m - 1]} ${y}`;
-  };
-
-  const hasTestAccess = (testId: number) => {
-    return accessList.includes(-1) || 
-           (accessList.includes(-2) && first6TestIds.includes(testId)) || 
-           accessList.includes(testId);
-  };
-
-  const isSubjectUnlocked = (category: string) => {
-    const subjectPapers = tests.filter((t: any) => t.category === category && t.title !== '_SUBJECT_PLACEHOLDER_');
-    if (subjectPapers.length === 0) return false;
-    return subjectPapers.every((p: any) => hasTestAccess(p.id));
-  };
-
-  const isSubjectPartiallyUnlocked = (category: string) => {
-    const subjectPapers = tests.filter((t: any) => t.category === category && t.title !== '_SUBJECT_PLACEHOLDER_');
-    if (subjectPapers.length === 0) return false;
-    const unlockedCount = subjectPapers.filter((p: any) => hasTestAccess(p.id)).length;
-    return unlockedCount > 0 && unlockedCount < subjectPapers.length;
-  };
-
-  const subjectsMap: Record<string, { category: string; price: number; papers: MockTest[] }> = {};
-  tests.forEach(test => {
-    if (!test.is_free) {
-      if (!subjectsMap[test.category]) {
-        subjectsMap[test.category] = { category: test.category, price: test.price, papers: [] };
-      }
-      subjectsMap[test.category].papers.push(test);
-    }
-  });
-  const paidSubjects = Object.values(subjectsMap).sort((a, b) => a.category.localeCompare(b.category));
-  paidSubjects.forEach(sub => {
-    sub.papers.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
-  });
-
-  const renderTestCard = (test: MockTest) => {
-    const status = getTestStatus(test);
-    const attempt = (performance?.submissions || []).find(s => (s as any).test_id === test.id);
-
+  if (loading) {
     return (
-      <Card key={test.id} className="flex flex-col overflow-hidden border-border hover:shadow-elegant transition-all group">
-        <div
-          className="h-24 relative flex items-end p-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent"
-          style={{ backgroundImage: test.image_url ? `url(${test.image_url})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+        <span className="text-xs text-slate-500 font-medium">Loading exam dashboard...</span>
+      </div>
+    );
+  }
+
+  // Helper to categorize AO / AAO papers into the 4 requested sections
+  const getAoAaoSections = (papers: MockTest[]) => {
+    const freePapers = papers.filter(t => isPaperFree(t));
+    const paidPapers = papers.filter(t => !isPaperFree(t));
+
+    const importantPapers = paidPapers.filter(t => t.category?.toLowerCase().includes('important'));
+    const bscAgriPapers = paidPapers.filter(t => !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii') || t.title.toLowerCase().includes('bsc agri')));
+    const gkPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk') || t.title.toLowerCase().includes('general knowledge') || t.title.toLowerCase().includes('gk')));
+    const otherPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
+
+    const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+
+    return [
+      {
+        id: 'free',
+        title: 'Free Practice Papers',
+        badge: 'Free Access',
+        description: 'Available immediately to all registered students without subscription',
+        papers: freePapers.sort(sortFn)
+      },
+      {
+        id: 'important',
+        title: 'Important Papers',
+        badge: 'High Yield Series',
+        description: 'Comprehensive high-priority question sets for General Knowledge and BSc Agri',
+        papers: importantPapers.sort(sortFn)
+      },
+      {
+        id: 'bsc_agri',
+        title: 'BSc Agri(85%) – Paper II',
+        badge: 'Core Subject Mocks',
+        description: '100 marks full-syllabus Agriculture discipline mock test series',
+        papers: bscAgriPapers.sort(sortFn)
+      },
+      {
+        id: 'gk',
+        title: 'General Knowledge – Paper I',
+        badge: 'General Paper Mocks',
+        description: 'Karnataka state general studies, current affairs, and mental ability series',
+        papers: gkPapers.sort(sortFn)
+      },
+      ...(otherPapers.length > 0 ? [{
+        id: 'other',
+        title: 'Additional Mock Papers',
+        badge: 'Additional Sets',
+        description: 'Other mock papers and practice tests under AO / AAO',
+        papers: otherPapers.sort(sortFn)
+      }] : [])
+    ];
+  };
+
+  // ── VIEW: INSIDE A SPECIFIC EXAM ─────────────────────────
+  if (selectedSubject) {
+    const currentExam = dynamicExamsList.find(d => d.id === selectedSubject) || dynamicExamsList[0];
+    const isAoAao = currentExam.id === 'AO / AAO' || currentExam.id === 'AO/AAO';
+    let examPapers = currentExam.papers;
+
+    if (paperFilterTab === 'free') {
+      examPapers = examPapers.filter(t => isPaperFree(t));
+    } else if (paperFilterTab === 'paid') {
+      examPapers = examPapers.filter(t => !isPaperFree(t));
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      examPapers = examPapers.filter(t => t.title.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q)));
+    }
+
+    const aoSections = isAoAao ? getAoAaoSections(examPapers) : [];
+
+    const renderTestRow = (test: MockTest, index: number) => {
+      const status = getTestStatus(test);
+      const attempt = (performance?.submissions || []).find(s => (s as any).test_id === test.id);
+
+      return (
+        <div 
+          key={test.id} 
+          className="p-3 sm:p-3.5 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 border border-slate-200/80 dark:border-slate-800 rounded-xl sm:rounded-2xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/60" />
-          <div className="relative flex items-center justify-between w-full">
-            <Badge
-              className="text-[10px] px-2 py-0.5"
-              style={{ backgroundColor: CATEGORY_COLORS[test.category] || '#16a34a', color: '#fff' }}
-            >
-              {test.category}
-            </Badge>
-            {status === 'free' && <Badge className="text-[10px] bg-emerald-500 hover:bg-emerald-600 text-white border-0 shadow-sm"><Unlock className="w-3 h-3 mr-1" />FREE</Badge>}
-            {status === 'unlocked' && <Badge className="text-[10px] bg-green-600 text-white border-0 shadow-sm"><Unlock className="w-3 h-3 mr-1" />Unlocked</Badge>}
-            {status === 'paid' && <Badge className="text-[10px] bg-amber-600 text-white border-0 shadow-sm"><Lock className="w-3 h-3 mr-1" />Paid</Badge>}
-          </div>
-        </div>
-
-        <div className="p-4 flex-1 flex flex-col gap-3">
-          <h3 className="font-bold text-base leading-snug">{test.title}</h3>
-          {test.description && <p className="text-xs text-muted-foreground line-clamp-2">{test.description}</p>}
-
-          {attempt && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Star className="w-3 h-3 text-amber-500" />
-              Last score: <span className="font-semibold text-foreground">{formatScore(attempt.score, (attempt as any).total_questions)}</span>
+          {/* Left Details */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 font-bold text-xs group-hover:border-emerald-500 group-hover:text-emerald-600 transition-colors shadow-2xs">
+              <FileText className="w-4 h-4" />
             </div>
-          )}
 
-          <div className="mt-auto pt-2">
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors leading-snug">
+                {test.title}
+              </h4>
+
+              {test.description && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                  {test.description}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Right Score & Action */}
+          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 self-stretch sm:self-auto justify-between sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/70 dark:border-slate-800">
+            {attempt && (
+              <div className="text-xs bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-1 shadow-2xs">
+                <Star className="w-3.5 h-3.5 text-emerald-600 fill-emerald-600" />
+                <span className="text-slate-500 font-medium">Score:</span>
+                <span className="font-black text-slate-900 dark:text-white">
+                  {formatScore(attempt.score, (attempt as any).total_questions)}
+                </span>
+              </div>
+            )}
+
             {status === 'paid' ? (
               <Button 
                 onClick={() => {
                   if (!userId) onRequireAuth?.();
                   else navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
                 }}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer" 
+                className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl h-9 px-4 cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5" 
                 size="sm"
               >
-                <Lock className="w-3.5 h-3.5 mr-2" />Unlock Paper
+                <Lock className="w-3.5 h-3.5" />
+                <span>Unlock Access</span>
               </Button>
             ) : (
               <Button 
-                className="w-full gradient-primary" 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs h-9 px-4 cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5" 
                 size="sm"
                 onClick={() => {
                   if (!userId) onRequireAuth?.();
                   else navigate({ to: `/ao/aao/test/${test.id}` as any });
                 }}
               >
-                <Clock className="w-3.5 h-3.5 mr-2" />
-                {attempt ? 'Retake Test' : 'Start Test'}
+                <Clock className="w-3.5 h-3.5" />
+                <span>{attempt ? 'Retake Test' : 'Start Test'}</span>
+                <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
               </Button>
             )}
           </div>
         </div>
-      </Card>
-    );
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  // ── FREE TESTS VIEW ──────────────────────────────────────
-  if (view === 'free-tests') {
-    const freeTests = tests.filter(t => t.is_free).sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
+      );
+    };
 
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3 border-b border-border pb-4">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setView('default')}
-            className="cursor-pointer hover:bg-muted"
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            Back
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Free Practice Papers</h1>
-            <p className="text-sm text-muted-foreground">Select any of the free papers below to begin practicing</p>
+      <div className="space-y-4 animate-in fade-in duration-300">
+        {/* Top Header & Action Bar: Back Button + Exam Portal Name + Filters + Search */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-0.5 pb-1">
+          {/* Left: Back Button + Exam Portal Title */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setSelectedSubject(null); setPaperFilterTab('all'); setSearchQuery(''); }}
+              className="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-300 hover:text-emerald-600 flex items-center justify-center transition-all cursor-pointer shrink-0 shadow-xs"
+              title="Back to Exam Portals"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white font-display leading-tight">
+                  {currentExam.name}
+                </h1>
+                {currentExam.isUnlocked ? (
+                  <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                    Active
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium line-clamp-1">
+                {currentExam.designation}
+              </p>
+            </div>
+          </div>
+
+          {/* Right: Filter Pills + Search */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5">
+            {/* Filter Pills */}
+            <div className="grid grid-cols-3 sm:flex sm:items-center gap-1 sm:gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+              <button
+                onClick={() => setPaperFilterTab('all')}
+                className={`px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all text-center truncate ${
+                  paperFilterTab === 'all' ? 'bg-white dark:bg-slate-800 shadow-xs text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                All ({currentExam.papers.length})
+              </button>
+              <button
+                onClick={() => setPaperFilterTab('free')}
+                className={`px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 truncate ${
+                  paperFilterTab === 'free' ? 'bg-white dark:bg-slate-800 shadow-xs text-emerald-600' : 'text-slate-500 hover:text-emerald-600'
+                }`}
+              >
+                <Unlock className="w-3 h-3 text-emerald-600 shrink-0" />
+                <span>Free ({currentExam.freeCount})</span>
+              </button>
+              <button
+                onClick={() => setPaperFilterTab('paid')}
+                className={`px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 truncate ${
+                  paperFilterTab === 'paid' ? 'bg-white dark:bg-slate-800 shadow-xs text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <Lock className="w-3 h-3 text-slate-600 shrink-0" />
+                <span>Paid ({currentExam.paidCount})</span>
+              </button>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search paper by title..."
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-card text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-600"
+              />
+            </div>
           </div>
         </div>
 
-        {freeTests.length === 0 ? (
-          <div className="text-center py-16 bg-muted/20 border border-dashed border-border rounded-2xl">
-            <BookOpen className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
-            <p className="text-muted-foreground font-medium">No free practice tests are currently available.</p>
+        {/* Papers Display: Vertical List Format (One Below Other in Category Cards) */}
+        {examPapers.length === 0 ? (
+          <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+            <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+            <p className="text-slate-500 font-medium text-xs sm:text-sm">No papers found under this filter.</p>
+            {paperFilterTab !== 'all' && (
+              <Button variant="link" size="sm" onClick={() => setPaperFilterTab('all')} className="mt-1 text-xs text-emerald-600">
+                View All {currentExam.shortTitle} Papers
+              </Button>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {freeTests.map(test => {
-              const attempt = (performance?.submissions || []).find(s => (s as any).test_id === test.id);
+        ) : isAoAao ? (
+          // ── AO / AAO 4 SECTIONS AS INTERACTIVE CARDS ONE BELOW OTHER ──
+          <div className="space-y-3.5 sm:space-y-4">
+            {aoSections.map((sec) => {
+              if (sec.papers.length === 0) return null;
+              const isExpanded = expandedSectionIds.includes(sec.id);
+
               return (
-                <Card key={test.id} className="flex flex-col overflow-hidden border-border hover:shadow-elegant transition-all group">
-                  <div
-                    className="h-32 relative flex items-end p-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent"
-                    style={{ backgroundImage: test.image_url ? `url(${test.image_url})` : undefined, backgroundSize: 'cover', backgroundPosition: 'center' }}
+                <Card 
+                  key={sec.id} 
+                  className={`bg-white dark:bg-card border transition-all duration-200 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] ${
+                    isExpanded ? 'border-emerald-500/50 ring-1 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-emerald-300'
+                  }`}
+                >
+                  {/* Card Header: Clickable to Open/Close Papers */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpandedSectionIds(prev => 
+                        prev.includes(sec.id) ? prev.filter(x => x !== sec.id) : [...prev, sec.id]
+                      );
+                    }}
+                    className="w-full p-4 sm:p-5 flex items-center justify-between gap-3 text-left cursor-pointer hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/10 to-black/60" />
-                    <div className="relative flex items-center justify-between w-full">
-                      <Badge className="text-[10px] px-2 py-0.5 bg-emerald-500 hover:bg-emerald-600 text-white border-0 shadow-sm">
-                        Free Test
-                      </Badge>
-                      <Badge className="text-[10px] px-2 py-0.5" style={{ backgroundColor: CATEGORY_COLORS[test.category] || '#16a34a', color: '#fff' }}>
-                        {test.category}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="p-5 flex-1 flex flex-col gap-3">
-                    <h3 className="font-bold text-lg leading-snug">{test.title}</h3>
-                    {test.description && <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">{test.description}</p>}
-
-                    {attempt && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                        <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                        Last Score: <span className="font-semibold text-foreground">{formatScore(attempt.score, (attempt as any).total_questions)}</span>
+                    <div className="flex items-start sm:items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
+                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                        isExpanded 
+                          ? 'bg-emerald-600 text-white shadow-xs' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}>
+                        <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
-                    )}
 
-                    <div className="mt-auto pt-3">
-                      <Button 
-                        className="w-full gradient-primary font-bold cursor-pointer" 
-                        onClick={() => {
-                          if (!userId) onRequireAuth?.();
-                          else navigate({ to: `/ao/aao/test/${test.id}` as any });
-                        }}
-                      >
-                        <Clock className="w-4 h-4 mr-2" />
-                        Start Test
-                      </Button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white font-display">
+                            {sec.title}
+                          </h3>
+                          <Badge className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            sec.id === 'free'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200'
+                          }`}>
+                            {sec.papers.length} Papers
+                          </Badge>
+                          {sec.id === 'free' && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                              Free Access
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 line-clamp-1">
+                          {sec.description}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Right Chevron & Toggle Text */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-bold text-emerald-600 hidden sm:inline-block">
+                        {isExpanded ? 'Hide Papers' : 'Open Papers'}
+                      </span>
+                      <div className={`w-8 h-8 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-center transition-transform duration-200 ${
+                        isExpanded ? 'rotate-180 bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-white dark:bg-slate-900 text-slate-500'
+                      }`}>
+                        <ChevronDown className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Card Body: List of papers inside this card */}
+                  {isExpanded && (
+                    <div className="p-4 sm:p-5 pt-0 sm:pt-0 space-y-2 border-t border-slate-100 dark:border-slate-800 mt-1">
+                      <div className="pt-3 space-y-2">
+                        {sec.papers.map((test, index) => renderTestRow(test, index))}
+                      </div>
+                    </div>
+                  )}
                 </Card>
               );
             })}
           </div>
+        ) : (
+          // ── OTHER DYNAMIC EXAMS LIST INSIDE CARD ──
+          <Card className="p-4 sm:p-5 bg-white dark:bg-card border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-[0_2px_12px_rgba(0,0,0,0.02)] space-y-2">
+            {examPapers.map((test, index) => renderTestRow(test, index))}
+          </Card>
         )}
       </div>
     );
   }
 
-  const isUnlocked = accessList.includes(-1);
-  const isPartiallyUnlocked = accessList.includes(-2);
-
-  const accessibleTests = isUnlocked ? tests : tests.filter(t => getTestStatus(t) === 'free' || getTestStatus(t) === 'unlocked');
-  const allTests = tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_');
-  const allPaidTests = tests.filter(t => !t.is_free && t.title !== '_SUBJECT_PLACEHOLDER_');
-
-  // For stats: show all tests when not unlocked, only accessible when unlocked
-  const statsTests = isUnlocked ? accessibleTests : allTests;
+  // ── VIEW: MAIN EXAMS SELECTOR VIEW ───────────────────────────
+  const allRealTests = tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_' && t.is_active);
 
   const stats = [
     { 
       icon: BookOpen, 
-      label: 'Tests Available', 
-      value: statsTests.length, 
-      color: 'text-blue-600 dark:text-blue-400', 
-      bgColor: 'bg-blue-50/80 dark:bg-blue-950/40', 
-      borderColor: 'border-blue-100/70 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700',
-      gradColor: 'from-white via-white to-blue-50/10 dark:from-slate-900 dark:to-blue-950/5'
+      label: 'Exam Portals', 
+      value: dynamicExamsList.length, 
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      iconBg: 'bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900/40'
     },
     { 
       icon: FileText, 
-      label: 'Attempts', 
-      value: performance?.totalAttempts ?? 0, 
-      color: 'text-green-600 dark:text-green-400', 
-      bgColor: 'bg-green-50/80 dark:bg-green-950/40', 
-      borderColor: 'border-green-100/70 dark:border-green-900/30 hover:border-green-300 dark:hover:border-green-700',
-      gradColor: 'from-white via-white to-green-50/10 dark:from-slate-900 dark:to-green-950/5'
+      label: 'Total Mock Papers', 
+      value: allRealTests.length, 
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      iconBg: 'bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900/40'
     },
     { 
       icon: Trophy, 
-      label: 'Total Questions', 
-      value: `${allTests.reduce((acc, t) => acc + ((t as any).total_questions ?? 0), 0)}`,
-      color: 'text-purple-600 dark:text-purple-400', 
-      bgColor: 'bg-purple-50/80 dark:bg-purple-950/40', 
-      borderColor: 'border-purple-100/70 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700',
-      gradColor: 'from-white via-white to-purple-50/10 dark:from-slate-900 dark:to-purple-950/5'
+      label: 'Your Attempts', 
+      value: performance?.totalAttempts ?? 0, 
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      iconBg: 'bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900/40'
     },
   ];
 
-  // (isUnlocked and isPartiallyUnlocked declared above)
-
-  const cardBg = isUnlocked
-    ? "from-indigo-50/70 via-white to-blue-50/30 dark:from-indigo-950/15 dark:via-slate-900 dark:to-blue-950/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700"
-    : isPartiallyUnlocked
-      ? "from-emerald-50/60 via-white to-blue-50/30 dark:from-emerald-950/10 dark:via-slate-900 dark:to-blue-950/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700"
-      : "from-amber-50/70 via-white to-orange-50/20 dark:from-amber-950/15 dark:via-slate-900 dark:to-orange-950/10 border-amber-200/60 dark:border-amber-900/30 hover:border-amber-400 dark:hover:border-amber-600";
-
-  const blurBg = isUnlocked || isPartiallyUnlocked
-    ? "bg-emerald-500/5 group-hover:bg-emerald-500/10"
-    : "bg-amber-500/5 group-hover:bg-amber-500/10";
-
-  const badgeStyles = isUnlocked || isPartiallyUnlocked
-    ? "bg-emerald-100/60 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border-emerald-200/40 dark:border-emerald-900/30"
-    : "bg-amber-100/60 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border-amber-200/40 dark:border-amber-900/30";
-
-  const premiumTitle = isUnlocked
-    ? "Open All Papers"
-    : isPartiallyUnlocked
-      ? "Premium Active"
-      : "Unlock Premium";
-
-  // ── DEFAULT VIEW (DASHBOARD CARDS) ──────────────────────
   return (
-    <div className="space-y-8">
-      {/* Stats row */}
+    <div className="space-y-5 sm:space-y-6">
+      {/* Overview Welcome Header */}
+      <div>
+        <h1 className="text-xl sm:text-3xl font-bold text-slate-900 dark:text-white font-display">
+          Exam Dashboard
+        </h1>
+        <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+          Welcome back, {userProfile?.name ? String(userProfile.name) : (userEmail || 'Student')}
+        </p>
+      </div>
+
+      {/* Top summary stats — Minimalist Black, Green & White */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        {stats.map(({ icon: Icon, label, value, color, bgColor, borderColor, gradColor }) => (
-          <Card key={label} className={`group p-2.5 sm:p-4 flex flex-col sm:flex-row items-center sm:items-center text-center sm:text-left gap-2 sm:gap-4 bg-gradient-to-br ${gradColor} border ${borderColor} hover:shadow-soft transition-all duration-300`}>
-            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 border border-slate-100 dark:border-slate-800 group-hover:scale-105 transition-transform duration-300 ${bgColor} ${color}`}>
+        {stats.map(({ icon: Icon, label, value, iconColor, iconBg }) => (
+          <Card 
+            key={label} 
+            className="p-2.5 sm:p-5 flex flex-col sm:flex-row items-center text-center sm:text-left gap-2 sm:gap-4 bg-white dark:bg-card border border-slate-200 dark:border-slate-800 rounded-xl sm:rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:border-emerald-300 dark:hover:border-emerald-800 transition-all"
+          >
+            <div className={`w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}>
               <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] sm:text-xs text-muted-foreground font-semibold leading-tight sm:truncate">{label}</p>
-              <p className={`text-sm sm:text-xl font-extrabold mt-0.5 sm:mt-1 leading-none ${color}`}>{value}</p>
+              <p className="text-[9px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-tight sm:tracking-wider truncate">{label}</p>
+              <p className="text-base sm:text-2xl font-black text-slate-900 dark:text-white leading-none mt-0.5">{value}</p>
             </div>
           </Card>
         ))}
       </div>
 
-      {/* Side-by-side Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-6">
-        {/* Free Access Card */}
-        <Card className="p-4 sm:p-6 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 dark:from-emerald-950/15 dark:via-slate-900 dark:to-teal-950/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-md transition-all duration-300 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group rounded-2xl">
-          <div className="absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 bg-emerald-500/5 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none group-hover:bg-emerald-500/10 transition-all duration-700" />
-          <div className="space-y-2 relative z-10 w-full">
-            <div className="flex items-center gap-2 sm:gap-2.5">
-              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-emerald-100/60 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-200/40 dark:border-emerald-900/30 group-hover:scale-105 transition-transform duration-300">
-                <Unlock className="w-4 h-4 sm:w-5 sm:h-5" />
-              </div>
-              <h2 className="text-xs sm:text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 font-serif leading-tight">
-                Free Practice
-              </h2>
-            </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3 sm:line-clamp-none font-medium">
-              Start practicing immediately with our selection of free mock papers. Practice general agriculture and agronomy papers with no commitment.
-            </p>
-          </div>
-          <div className="relative z-10 pt-1 sm:pt-2 w-full">
-            <Button 
-              onClick={() => setView('free-tests')}
-              className="bg-emerald-600 hover:bg-emerald-700 hover:shadow-lg hover:shadow-emerald-600/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
+      {/* Dynamic Exam Cards Grid — Minimalist Black, Green & White */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pt-1">
+        {dynamicExamsList.map((exam) => {
+          return (
+            <Card
+              key={exam.id}
+              className="p-4 sm:p-6 bg-white dark:bg-card border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl flex flex-col justify-between gap-4 sm:gap-5 relative overflow-hidden group shadow-[0_2px_15px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_rgba(16,185,129,0.1)] hover:border-emerald-500/50 transition-all duration-200"
             >
-              Start Free Papers
-            </Button>
-          </div>
-        </Card>
+              {/* Minimal Top Green Accent Line */}
+              <div className="absolute inset-x-0 top-0 h-[2.5px] sm:h-[3px] bg-emerald-600" />
 
-        {/* Premium Access Card */}
-        <Card className={`p-4 sm:p-6 flex flex-col justify-between gap-3 sm:gap-4 overflow-hidden relative group hover:shadow-md transition-all duration-300 rounded-2xl border bg-gradient-to-br ${cardBg}`}>
-          <div className={`absolute right-0 bottom-0 w-24 h-24 sm:w-32 sm:h-32 rounded-full blur-2xl -mr-6 -mb-6 sm:-mr-8 sm:-mb-8 pointer-events-none transition-all duration-700 ${blurBg}`} />
-          <div className="space-y-2 relative z-10 w-full">
-            <div className="flex items-center gap-2 sm:gap-2.5">
-              <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center shrink-0 border group-hover:scale-105 transition-transform duration-300 ${badgeStyles}`}>
-                {isUnlocked || isPartiallyUnlocked ? <Unlock className="w-4 h-4 sm:w-5 sm:h-5" /> : <Lock className="w-4 h-4 sm:w-5 sm:h-5" />}
-              </div>
-              <h2 className="text-xs sm:text-base md:text-lg font-bold text-slate-800 dark:text-slate-100 font-serif leading-tight">
-                {premiumTitle}
-              </h2>
-            </div>
-            <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-3 sm:line-clamp-none font-medium">
-              {isUnlocked 
-                ? "You have full unrestricted access to all premium tests, previous years' papers, and detailed performance insights." 
-                : isPartiallyUnlocked
-                  ? "You have unlocked the first 6 mock test sets (18 papers). Access them on the premium page or upgrade to unlock all 36 papers."
-                  : "Unlock all 36 premium mock tests, high-yield practice questions, and detailed analytics designed by agricultural specialists."}
-            </p>
-          </div>
-          <div className="relative z-10 pt-1 sm:pt-2 w-full">
-            {isUnlocked ? (
-              <Button 
-                onClick={() => navigate({ to: '/ao/aao/premium' })} 
-                className="bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-600/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
-              >
-                Open All Papers
-              </Button>
-            ) : isPartiallyUnlocked ? (
-              <div className="flex flex-col lg:flex-row gap-1.5 sm:gap-2">
-                <Button 
-                  onClick={() => navigate({ to: '/ao/aao/premium' })} 
-                  className="bg-emerald-600 hover:bg-emerald-700 hover:shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-xl flex-1 cursor-pointer font-bold"
-                >
-                  Open Papers
-                </Button>
-                <Button 
-                  onClick={() => navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any })} 
-                  className="bg-amber-600 hover:bg-amber-700 hover:shadow-md px-2 py-2 text-xs sm:px-4 sm:py-2.5 rounded-xl flex-1 cursor-pointer font-bold"
-                >
-                  Upgrade
-                </Button>
-              </div>
-            ) : pendingPayment ? (
-              <Button 
-                onClick={() => navigate({ to: '/ao/aao/checkout' })} 
-                className="bg-orange-500 hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-500/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
-              >
-                Verify Payment
-              </Button>
-            ) : (
-              <Button 
-                onClick={() => {
-                  if (!userId) onRequireAuth?.();
-                  else navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
-                }} 
-                className="bg-amber-600 hover:bg-amber-700 hover:shadow-lg hover:shadow-amber-600/15 text-white font-bold px-3 py-2 text-xs sm:px-6 sm:py-2.5 sm:text-sm rounded-xl w-full cursor-pointer transition-all duration-300"
-              >
-                Unlock Access
-              </Button>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Release Notice Card */}
-      <Card className="p-4 sm:p-5 border border-emerald-100/85 dark:border-emerald-900/30 bg-gradient-to-r from-emerald-50/20 via-teal-50/10 to-transparent dark:from-emerald-950/10 dark:via-teal-950/5 rounded-2xl flex items-center gap-4 hover:shadow-soft transition-all duration-300">
-        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100/50 shadow-sm">
-          <Sparkles className="w-5 h-5 animate-pulse" />
-        </div>
-        <div>
-          <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">More Papers Coming Soon!</h4>
-          <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed font-medium">
-            In addition to the above papers, we will shortly release a few more important papers to boost your preparation.
-          </p>
-        </div>
-      </Card>
-
-      {/* Paper Release Calendar — always visible */}
-      <div className="space-y-6 pt-2 animate-in fade-in duration-500">
-        <Card className="p-5 sm:p-6 border border-slate-200 shadow-sm bg-white rounded-2xl space-y-4">
-          <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-slate-800 font-serif text-base sm:text-lg flex items-center gap-2">
-              <Clock className="w-5 h-5 text-emerald-600" /> Papers Release Calendar
-            </h3>
-            <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-100 px-3 py-1 rounded-full uppercase tracking-wider shrink-0">
-              12 Dates · 36 Papers
-            </span>
-          </div>
-
-          {!isUnlocked && !isPartiallyUnlocked && (
-            <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-              <Lock className="w-3.5 h-3.5 shrink-0" />
-              <span>Unlock premium access to start all papers as they release.</span>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {RELEASE_DATES.map((item) => {
-              const isReleased = checkReleased(item.date);
-              return (
-                <div 
-                  key={item.paper} 
-                  className={`p-3.5 rounded-xl border flex flex-col justify-between transition-all duration-300 ${
-                    isReleased 
-                      ? 'border-emerald-100 bg-emerald-50/45 text-emerald-950 shadow-sm' 
-                      : 'border-slate-100 bg-slate-50/50 text-slate-500'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-[9px] uppercase font-extrabold tracking-wider opacity-65">{item.paper}</span>
-                    {isReleased ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    ) : (
-                      <Lock className="w-3 h-3 text-slate-300 shrink-0" />
-                    )}
+              <div className="space-y-3 sm:space-y-4 relative z-10">
+                {/* Header with Minimalist Badge & Status */}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                    <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs sm:text-sm shadow-xs ring-1 ring-slate-800 shrink-0 group-hover:bg-emerald-600 transition-colors">
+                      {exam.shortTitle.split('/')[0].trim()}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-base sm:text-lg font-black text-slate-950 dark:text-white font-display group-hover:text-emerald-600 transition-colors leading-tight truncate">
+                        {exam.name}
+                      </h3>
+                      <p className="text-[11px] sm:text-xs text-slate-500 font-medium truncate mt-0.5">
+                        {exam.designation}
+                      </p>
+                    </div>
                   </div>
-                  <div className="font-bold text-sm tracking-tight text-slate-800">{formatDateLabel(item.date)}</div>
-                  <div className="text-[10px] mt-1 font-semibold">
-                    {isReleased ? (
-                      <span className="text-emerald-700">Available Now</span>
-                    ) : (
-                      <span className="text-slate-400">Scheduled</span>
-                    )}
+
+                  {exam.isUnlocked ? (
+                    <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200/80 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg shrink-0 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" /> Active
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg shrink-0">
+                      Exam Portal
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Description */}
+                <p className="text-xs sm:text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
+                  {exam.description}
+                </p>
+
+                {/* Minimalist 3-Column Aligned Badges Row */}
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-0.5">
+                  <div className="py-1.5 px-1.5 rounded-lg sm:rounded-xl bg-slate-900 text-white text-[10px] sm:text-xs font-bold text-center flex items-center justify-center gap-1 shadow-xs truncate">
+                    <span>📚</span> <span>{exam.papers.length} Total</span>
+                  </div>
+                  <div className="py-1.5 px-1.5 rounded-lg sm:rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] sm:text-xs font-bold text-center flex items-center justify-center gap-1 shadow-xs truncate">
+                    <Unlock className="w-3 h-3 text-emerald-600 shrink-0" /> <span>{exam.freeCount} Free</span>
+                  </div>
+                  <div className="py-1.5 px-1.5 rounded-lg sm:rounded-xl bg-slate-100 text-slate-700 border border-slate-200 text-[10px] sm:text-xs font-bold text-center flex items-center justify-center gap-1 shadow-xs truncate">
+                    <Lock className="w-3 h-3 text-slate-600 shrink-0" /> <span>{exam.paidCount} Paid</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </Card>
+              </div>
+
+              {/* Action Full-Width Minimal Green Button */}
+              <div className="relative z-10 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <Button
+                  onClick={() => setSelectedSubject(exam.id)}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-2.5 sm:py-3.5 h-auto rounded-xl shadow-[0_2px_10px_rgba(16,185,129,0.2)] hover:shadow-[0_4px_16px_rgba(16,185,129,0.3)] active:translate-y-0.5 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>Explore {exam.shortTitle} Papers</span>
+                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

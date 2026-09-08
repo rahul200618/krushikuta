@@ -86,6 +86,10 @@ function handleMockAction(action, payload) {
     }
     
     case 'start-test': {
+      const { testId } = payload;
+      if (testId > 2) {
+        return { error: 'Access denied: Premium subscription required to take this test.', requires_payment: true };
+      }
       return { submissionId: 999 };
     }
     
@@ -94,7 +98,7 @@ function handleMockAction(action, payload) {
     }
     
     case 'check-user-access': {
-      return { access: [1, 2, -1] };
+      return { access: [] };
     }
 
     case 'get-user-performance': {
@@ -383,7 +387,7 @@ export default async function handler(req, res) {
 
       case 'get-mock-questions': {
         try {
-          const { testId } = payload;
+          const { testId, userId, email } = payload;
           const { data, error } = await supabase
             .from('mock_questions')
             .select('*')
@@ -400,42 +404,118 @@ export default async function handler(req, res) {
 
       // ── EXAM SESSION ─────────────────────────────────────────
       case 'start-test': {
-        const { userId, testId, name, phone, email, college } = payload;
+        try {
+          const { userId, testId, name, phone, email, college } = payload;
 
-        // Check for existing submission
-        const { data: existing } = await supabase
-          .from('exam_submissions')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('test_id', testId)
-          .single();
+          if (!userId) {
+            return res.status(401).json({ error: 'User must be logged in to attend this test.' });
+          }
 
-        let submissionId;
-        if (existing) {
-          // Reset for retake
-          const { error } = await supabase
+          // 1. Fetch test details to check if it's free
+          const { data: testData, error: testErr } = await supabase
+            .from('mock_tests')
+            .select('*')
+            .eq('id', testId)
+            .maybeSingle();
+
+          if (testErr) throw testErr;
+          if (!testData) {
+            return res.status(404).json({ error: 'Mock test not found.' });
+          }
+
+          const title = (testData.title || '').toLowerCase().trim();
+          const cat = (testData.category || '').toLowerCase().trim();
+          const isFreeTest =
+            testData.is_free ||
+            title.includes('paper -i (general knowledge)') ||
+            title.includes('paper-ii (bsc agri graduates)') ||
+            (cat === 'general paper' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0')) ||
+            (cat === 'core papers' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0'));
+
+          // 2. If test is paid, verify user access in user_purchases
+          if (!isFreeTest) {
+            let purchaseQuery = supabase
+              .from('user_purchases')
+              .select('mock_test_id')
+              .eq('status', 'active');
+
+            if (email) {
+              purchaseQuery = purchaseQuery.or(`user_id.eq.${userId},email.eq.${email}`);
+            } else {
+              purchaseQuery = purchaseQuery.eq('user_id', userId);
+            }
+
+            const { data: purchaseRows, error: pErr } = await purchaseQuery;
+            if (pErr) throw pErr;
+
+            const accessList = (purchaseRows || []).map(r => r.mock_test_id);
+
+            // Check if there's a placeholder ID for custom exam
+            let customPlaceholderId = null;
+            if (testData.category) {
+              const { data: placeholderRow } = await supabase
+                .from('mock_tests')
+                .select('id')
+                .eq('title', '_SUBJECT_PLACEHOLDER_')
+                .ilike('category', testData.category.trim())
+                .maybeSingle();
+              if (placeholderRow) customPlaceholderId = placeholderRow.id;
+            }
+
+            const hasAccess =
+              accessList.includes(-1) ||
+              accessList.includes(-101) ||
+              accessList.includes(Number(testId)) ||
+              (customPlaceholderId && accessList.includes(customPlaceholderId)) ||
+              (cat.includes('aho') && accessList.includes(-102));
+
+            if (!hasAccess) {
+              return res.status(403).json({
+                error: 'Access Denied: Please subscribe to premium or contact admin to unlock this mock test.',
+                requires_payment: true
+              });
+            }
+          }
+
+          // Check for existing submission
+          const { data: existing } = await supabase
             .from('exam_submissions')
-            .update({ score: null, is_completed: false, answers: null, submitted_at: new Date().toISOString() })
-            .eq('id', existing.id);
-          if (error) throw error;
-          submissionId = existing.id;
-        } else {
-          // Get total questions count
-          const { count } = await supabase
-            .from('mock_questions')
-            .select('id', { count: 'exact', head: true })
-            .eq('mock_test_id', testId);
-
-          const { data, error } = await supabase
-            .from('exam_submissions')
-            .insert([{ user_id: userId, test_id: testId, name, phone, email, college, is_completed: false, total_questions: count || 0 }])
             .select('id')
+            .eq('user_id', userId)
+            .eq('test_id', testId)
             .single();
-          if (error) throw error;
-          submissionId = data.id;
-        }
 
-        return res.status(200).json({ submissionId });
+          let submissionId;
+          if (existing) {
+            // Reset for retake
+            const { error } = await supabase
+              .from('exam_submissions')
+              .update({ score: null, is_completed: false, answers: null, submitted_at: new Date().toISOString() })
+              .eq('id', existing.id);
+            if (error) throw error;
+            submissionId = existing.id;
+          } else {
+            // Get total questions count
+            const { count } = await supabase
+              .from('mock_questions')
+              .select('id', { count: 'exact', head: true })
+              .eq('mock_test_id', testId);
+
+            const { data, error } = await supabase
+              .from('exam_submissions')
+              .insert([{ user_id: userId, test_id: testId, name, phone, email, college, is_completed: false, total_questions: count || 0 }])
+              .select('id')
+              .single();
+            if (error) throw error;
+            submissionId = data.id;
+          }
+
+          return res.status(200).json({ submissionId });
+        } catch (err) {
+          console.error('[exam-api] start-test failed:', err);
+          logToFile(`start-test error: ${err.message || err}`);
+          return res.status(500).json({ error: err.message || 'Failed to start test' });
+        }
       }
 
       case 'submit-test': {

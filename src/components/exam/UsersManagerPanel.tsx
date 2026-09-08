@@ -91,6 +91,87 @@ export function UsersManagerPanel() {
 
   const [accessStudent, setAccessStudent] = useState<StudentProfile | null>(null);
   const [loadingAccessList, setLoadingAccessList] = useState(false);
+  const [selectedExamFilter, setSelectedExamFilter] = useState<string>("all");
+
+  const AO_AAO_INTERNAL_CATEGORIES = [
+    'ao/aao',
+    'ao / aao',
+    'important papers',
+    'bsc agri(85%)-paper ii',
+    'bsc agri',
+    'general knowledge-paper i',
+    'general paper',
+    'core papers',
+    'general',
+    'practical exam'
+  ];
+
+  const isAoAaoPaper = (cat?: string) => {
+    if (!cat) return true;
+    const clean = cat.toLowerCase().trim();
+    return AO_AAO_INTERNAL_CATEGORIES.some(c => clean === c || clean.includes('important') || clean.includes('bsc agri') || clean.includes('general knowledge') || clean.includes('general paper') || clean.includes('core papers'));
+  };
+
+  const isPaperFree = (test: any) => {
+    const title = (test.title || '').toLowerCase().trim();
+    const cat = (test.category || '').toLowerCase().trim();
+    if (
+      title.includes('paper -i (general knowledge)') ||
+      title.includes('paper-ii (bsc agri graduates)') ||
+      (cat === 'general paper' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0')) ||
+      (cat === 'core papers' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0'))
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  interface ExamGroupItem {
+    id: string;
+    name: string;
+    shortTitle: string;
+    bundleId: number;
+    papers: any[];
+  }
+
+  const defaultAoExamItem: ExamGroupItem = {
+    id: 'AO / AAO',
+    name: 'AO / AAO Preparation',
+    shortTitle: 'AO / AAO',
+    bundleId: -101,
+    papers: []
+  };
+
+  const customExamsMap: Record<string, ExamGroupItem> = {};
+
+  tests.forEach(test => {
+    if (test.title === '_SUBJECT_PLACEHOLDER_') {
+      const cat = test.category?.trim();
+      if (cat && !isAoAaoPaper(cat)) {
+        customExamsMap[cat] = {
+          id: cat,
+          name: `${cat} Preparation`,
+          shortTitle: cat,
+          bundleId: test.id,
+          papers: []
+        };
+      }
+    }
+  });
+
+  tests.forEach(test => {
+    if (test.title === '_SUBJECT_PLACEHOLDER_') return;
+    const matchingCat = Object.keys(customExamsMap).find(
+      catKey => test.category?.toLowerCase().trim() === catKey.toLowerCase().trim()
+    );
+    if (matchingCat) {
+      customExamsMap[matchingCat].papers.push(test);
+    } else {
+      defaultAoExamItem.papers.push(test);
+    }
+  });
+
+  const allExamsList: ExamGroupItem[] = [defaultAoExamItem, ...Object.values(customExamsMap)];
 
   const paidTests = tests.filter(t => !t.is_free && t.title !== '_SUBJECT_PLACEHOLDER_').sort((a, b) => a.id - b.id);
   const first6TestIds = paidTests.slice(0, 6).map(t => t.id);
@@ -660,11 +741,13 @@ export function UsersManagerPanel() {
                             <SelectValue placeholder="Choose mock test..." />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="-1">🔓 All-Access Bundle (Test ID: -1)</SelectItem>
-                            <SelectItem value="-2">🔓 First 6 Paper Releases (Test ID: -2)</SelectItem>
+                            <SelectItem value="-1">🔓 All-Access Bundle (All Exams & Papers) (ID: -1)</SelectItem>
+                            <SelectItem value="-101">🌾 AO / AAO Full Subject Access (ID: -101)</SelectItem>
+                            <SelectItem value="-102">🌿 AHO / ADH Full Subject Access (ID: -102)</SelectItem>
+                            <SelectItem value="-2">🔓 First 6 Paper Releases (ID: -2)</SelectItem>
                             {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => (
                               <SelectItem key={t.id} value={String(t.id)}>
-                                {t.title} ({t.category})
+                                [{t.category || 'General'}] {t.title} {t.is_free ? '(Free)' : `(₹${t.price})`}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -687,6 +770,7 @@ export function UsersManagerPanel() {
                     
                     {/* Bundles Status */}
                     <div className="grid grid-cols-2 gap-2">
+                      {/* All Access */}
                       <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
                         userAccessList.includes(-1) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
                       }`}>
@@ -731,6 +815,97 @@ export function UsersManagerPanel() {
                         )}
                       </div>
 
+                      {/* AO / AAO Subject Access */}
+                      <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                        userAccessList.includes(-101) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        <div className="font-semibold text-[#1a3820] truncate">AO/AAO Subject Access</div>
+                        <div className="text-[10px] text-muted-foreground">Subject ID: -101</div>
+                        {userAccessList.includes(-101) ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRevokeTestAccess(-101)}
+                            disabled={grantingAccess}
+                            className="w-full text-[10px] h-6 mt-1"
+                          >
+                            Revoke Access
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              setGrantingAccess(true);
+                              try {
+                                await grantAccess({
+                                  userId: selectedStudent.firebase_uid,
+                                  testId: -101,
+                                  email: selectedStudent.email,
+                                  amount: 0,
+                                  paymentMethod: "Admin Granted"
+                                });
+                                toast.success("AO/AAO Subject Access granted!");
+                                setUserAccessList(prev => [...prev, -101]);
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to grant");
+                              } finally {
+                                setGrantingAccess(false);
+                              }
+                            }}
+                            disabled={grantingAccess}
+                            className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
+                          >
+                            Grant AO/AAO
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* AHO / ADH Subject Access */}
+                      <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                        userAccessList.includes(-102) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+                      }`}>
+                        <div className="font-semibold text-[#1a3820] truncate">AHO/ADH Subject Access</div>
+                        <div className="text-[10px] text-muted-foreground">Subject ID: -102</div>
+                        {userAccessList.includes(-102) ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRevokeTestAccess(-102)}
+                            disabled={grantingAccess}
+                            className="w-full text-[10px] h-6 mt-1"
+                          >
+                            Revoke Access
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              setGrantingAccess(true);
+                              try {
+                                await grantAccess({
+                                  userId: selectedStudent.firebase_uid,
+                                  testId: -102,
+                                  email: selectedStudent.email,
+                                  amount: 0,
+                                  paymentMethod: "Admin Granted"
+                                });
+                                toast.success("AHO/ADH Subject Access granted!");
+                                setUserAccessList(prev => [...prev, -102]);
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to grant");
+                              } finally {
+                                setGrantingAccess(false);
+                              }
+                            }}
+                            disabled={grantingAccess}
+                            className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
+                          >
+                            Grant AHO/ADH
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* First 6 Papers (Legacy) */}
                       <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
                         userAccessList.includes(-2) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
                       }`}>
@@ -781,10 +956,16 @@ export function UsersManagerPanel() {
                       {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => {
                         const isFree = t.is_free;
                         const isFirst6 = !isFree && first6TestIds.includes(t.id);
+                        const cat = (t.category || '').toLowerCase();
+                        const title = (t.title || '').toLowerCase();
+                        const isAho = cat.includes('aho') || cat.includes('adh') || cat.includes('horticulture') || title.includes('aho') || title.includes('adh');
+                        const isAo = !isAho;
                         
-                        let status: 'free' | 'bundle-all' | 'bundle-6' | 'direct' | 'locked' = 'locked';
+                        let status: 'free' | 'bundle-all' | 'bundle-ao' | 'bundle-aho' | 'bundle-6' | 'direct' | 'locked' = 'locked';
                         if (isFree) status = 'free';
                         else if (userAccessList.includes(-1)) status = 'bundle-all';
+                        else if (userAccessList.includes(-101) && isAo) status = 'bundle-ao';
+                        else if (userAccessList.includes(-102) && isAho) status = 'bundle-aho';
                         else if (userAccessList.includes(-2) && isFirst6) status = 'bundle-6';
                         else if (userAccessList.includes(t.id)) status = 'direct';
                         
@@ -800,10 +981,16 @@ export function UsersManagerPanel() {
                                 <Badge className="bg-emerald-50 text-emerald-700 border-none text-[9px] font-bold">Free</Badge>
                               )}
                               {status === 'bundle-all' && (
-                                <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (All)</Badge>
+                                <Badge className="bg-purple-100 text-purple-800 border-none text-[9px] font-bold">All Access</Badge>
+                              )}
+                              {status === 'bundle-ao' && (
+                                <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">AO/AAO Access</Badge>
+                              )}
+                              {status === 'bundle-aho' && (
+                                <Badge className="bg-teal-100 text-teal-800 border-none text-[9px] font-bold">AHO/ADH Access</Badge>
                               )}
                               {status === 'bundle-6' && (
-                                <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (6 Pkgs)</Badge>
+                                <Badge className="bg-amber-100 text-amber-800 border-none text-[9px] font-bold">6 Pkgs</Badge>
                               )}
                               {status === 'direct' && (
                                 <>
@@ -985,30 +1172,76 @@ export function UsersManagerPanel() {
 
       {/* Quick Access Dialog */}
       <Dialog open={accessStudent !== null} onOpenChange={(open) => { if (!open) setAccessStudent(null); }}>
-        <DialogContent className="max-w-lg rounded-2xl border-[#e0e8e2]">
+        <DialogContent className="max-w-xl rounded-2xl border-[#e0e8e2] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-[#1a3820]">Manage Paper Access</DialogTitle>
             <DialogDescription className="text-xs text-[#5e7a63]">
               Quickly grant or revoke mock test access for {accessStudent?.name}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5 pt-4">
+
+          <div className="space-y-5 pt-2">
+            {/* Exam Filter Selection Bar */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-[#5e7a63]">Select Exam Portal</Label>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedExamFilter("all")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    selectedExamFilter === "all"
+                      ? "bg-[#1a3820] text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  All Exams ({tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').length})
+                </button>
+                {allExamsList.map(exam => (
+                  <button
+                    key={exam.id}
+                    type="button"
+                    onClick={() => setSelectedExamFilter(exam.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                      selectedExamFilter === exam.id
+                        ? "bg-[#1a3820] text-white shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {exam.shortTitle} ({exam.papers.length})
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Grant Section */}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-[#5e7a63]">Grant Access to a Mock Test</Label>
+              <Label className="text-xs font-semibold text-[#5e7a63]">Grant Access to a Mock Test or Exam Bundle</Label>
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Select value={selectedGrantTestId} onValueChange={setSelectedGrantTestId}>
                     <SelectTrigger className="w-full h-9 rounded-xl bg-white border-[#e0e8e2] text-xs">
-                      <SelectValue placeholder="Choose mock test..." />
+                      <SelectValue placeholder="Choose exam bundle or mock test..." />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="-1">🔓 All-Access Bundle (Test ID: -1)</SelectItem>
-                      <SelectItem value="-2">🔓 First 6 Paper Releases (Test ID: -2)</SelectItem>
-                      {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => (
-                        <SelectItem key={t.id} value={String(t.id)}>
-                          {t.title} ({t.category})
-                        </SelectItem>
+                    <SelectContent className="max-h-80">
+                      <SelectItem value="-1" className="font-bold text-emerald-800 bg-emerald-50/70">
+                        🌟 All-Access Master Pass (All Exam Portals: ID -1)
+                      </SelectItem>
+                      {allExamsList.map(exam => (
+                        <div key={exam.id} className="pt-1 border-t border-slate-100 mt-1">
+                          <SelectItem value={String(exam.bundleId)} className="font-bold text-[#1a3820] bg-slate-50">
+                            🎓 {exam.name} Full Bundle (ID: {exam.bundleId})
+                          </SelectItem>
+                          {exam.id === 'AO / AAO' && (
+                            <SelectItem value="-2" className="text-slate-700 pl-4">
+                              📦 AO / AAO First 6 Paper Releases (ID: -2)
+                            </SelectItem>
+                          )}
+                          {exam.papers.map(t => (
+                            <SelectItem key={t.id} value={String(t.id)} className="pl-6 text-xs text-slate-600">
+                              📄 {t.title}
+                            </SelectItem>
+                          ))}
+                        </div>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1024,26 +1257,34 @@ export function UsersManagerPanel() {
               </div>
             </div>
 
-            {/* Active List Section */}
+            {/* Active List Section: Dynamic Exam Bundles */}
             <div className="space-y-3">
-              <span className="text-xs font-bold text-[#1a3820] block">Access Summary</span>
+              <span className="text-xs font-bold text-[#1a3820] block">Exam Bundle Access Status</span>
               
-              {/* Bundles Status */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
-                  userAccessList.includes(-1) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
+              {/* Dynamic Bundles Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* 1. All-Access Master Pass */}
+                <div className={`p-3 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                  userAccessList.includes(-1) ? 'bg-emerald-50 border-emerald-300' : 'bg-slate-50 border-slate-200'
                 }`}>
-                  <div className="font-semibold text-[#1a3820] truncate">All-Access Bundle</div>
-                  <div className="text-[10px] text-muted-foreground">Mock Test ID: -1</div>
+                  <div>
+                    <div className="font-bold text-[#1a3820] flex items-center justify-between">
+                      <span>All-Access Master Pass</span>
+                      {userAccessList.includes(-1) && (
+                        <Badge className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0">Active</Badge>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Unlocks all competitive exam portals (ID: -1)</div>
+                  </div>
                   {userAccessList.includes(-1) ? (
                     <Button
                       size="sm"
                       variant="destructive"
                       onClick={() => handleQuickRevokeAccess(-1)}
                       disabled={grantingAccess}
-                      className="w-full text-[10px] h-6 mt-1"
+                      className="w-full text-[10px] h-7 mt-2"
                     >
-                      Revoke Bundle
+                      Revoke Master Pass
                     </Button>
                   ) : (
                     <Button
@@ -1059,7 +1300,7 @@ export function UsersManagerPanel() {
                             amount: 0,
                             paymentMethod: "Admin Granted"
                           });
-                          toast.success("All-Access Bundle granted!");
+                          toast.success("All-Access Master Pass granted!");
                           setUserAccessList(prev => [...prev, -1]);
                         } catch (e: any) {
                           toast.error(e.message || "Failed to grant");
@@ -1068,140 +1309,290 @@ export function UsersManagerPanel() {
                         }
                       }}
                       disabled={grantingAccess}
-                      className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
+                      className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-7 mt-2"
                     >
-                      Grant Bundle
+                      Grant Master Pass
                     </Button>
                   )}
                 </div>
 
-                <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
-                  userAccessList.includes(-2) ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'
-                }`}>
-                  <div className="font-semibold text-[#1a3820] truncate">First 6 Paper Releases</div>
-                  <div className="text-[10px] text-muted-foreground">Mock Test ID: -2</div>
-                  {userAccessList.includes(-2) ? (
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleQuickRevokeAccess(-2)}
-                      disabled={grantingAccess}
-                      className="w-full text-[10px] h-6 mt-1"
-                    >
-                      Revoke Bundle
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        if (!accessStudent) return;
-                        setGrantingAccess(true);
-                        try {
-                          await grantAccess({
-                            userId: accessStudent.firebase_uid,
-                            testId: -2,
-                            email: accessStudent.email,
-                            amount: 0,
-                            paymentMethod: "Admin Granted"
-                          });
-                          toast.success("First 6 Paper Releases granted!");
-                          setUserAccessList(prev => [...prev, -2]);
-                        } catch (e: any) {
-                          toast.error(e.message || "Failed to grant");
-                        } finally {
-                          setGrantingAccess(false);
-                        }
-                      }}
-                      disabled={grantingAccess}
-                      className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-6 mt-1"
-                    >
-                      Grant Bundle
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <span className="text-xs font-bold text-[#1a3820] block pt-2">Paper-by-Paper Status</span>
-              {loadingAccessList ? (
-                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-[#2c5f34] animate-spin" /></div>
-              ) : (
-                <div className="space-y-1.5 max-h-[220px] overflow-y-auto border border-[#e0e8e2] rounded-xl p-2 bg-slate-50/50">
-                  {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => {
-                    const isFree = t.is_free;
-                    const isFirst6 = !isFree && first6TestIds.includes(t.id);
-                    
-                    let status: 'free' | 'bundle-all' | 'bundle-6' | 'direct' | 'locked' = 'locked';
-                    if (isFree) status = 'free';
-                    else if (userAccessList.includes(-1)) status = 'bundle-all';
-                    else if (userAccessList.includes(-2) && isFirst6) status = 'bundle-6';
-                    else if (userAccessList.includes(t.id)) status = 'direct';
-                    
+                {/* 2. Dynamic Exam Bundles (Filtered by active exam or showing all) */}
+                {allExamsList
+                  .filter(exam => selectedExamFilter === 'all' || selectedExamFilter === exam.id)
+                  .map(exam => {
+                    const hasExamBundle = userAccessList.includes(exam.bundleId);
                     return (
-                      <div key={t.id} className="flex items-center justify-between p-2 bg-white border border-[#e0e8e2] rounded-lg text-xs gap-2 shadow-sm">
-                        <div className="truncate flex-1">
-                          <span className="font-semibold text-[#1a3820] block truncate" title={t.title}>{t.title}</span>
-                          <span className="text-[9px] text-muted-foreground uppercase">{t.category}</span>
+                      <div 
+                        key={exam.id} 
+                        className={`p-3 rounded-xl border flex flex-col justify-between gap-1 text-xs ${
+                          hasExamBundle ? 'bg-emerald-50 border-emerald-300' : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div>
+                          <div className="font-bold text-[#1a3820] flex items-center justify-between">
+                            <span className="truncate">{exam.name}</span>
+                            {hasExamBundle && (
+                              <Badge className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0">Active</Badge>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">Bundle Test ID: {exam.bundleId} ({exam.papers.length} Papers)</div>
                         </div>
-                        
-                        <div className="flex items-center gap-1.5">
-                          {status === 'free' && (
-                            <Badge className="bg-emerald-50 text-emerald-700 border-none text-[9px] font-bold">Free</Badge>
-                          )}
-                          {status === 'bundle-all' && (
-                            <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (All)</Badge>
-                          )}
-                          {status === 'bundle-6' && (
-                            <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">Unlocked (6 Pkgs)</Badge>
-                          )}
-                          {status === 'direct' && (
-                            <>
-                              <Badge className="bg-green-100 text-green-800 border-none text-[9px] font-bold">Unlocked (Direct)</Badge>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleQuickRevokeAccess(t.id)}
-                                disabled={grantingAccess}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-1.5 rounded text-[9px] font-bold cursor-pointer"
-                              >
-                                Revoke
-                              </Button>
-                            </>
-                          )}
-                          {status === 'locked' && (
-                            <>
-                              <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] font-bold">Locked</Badge>
-                              <Button
-                                size="sm"
-                                onClick={async () => {
-                                  if (!accessStudent) return;
-                                  setGrantingAccess(true);
-                                  try {
-                                    await grantAccess({
-                                      userId: accessStudent.firebase_uid,
-                                      testId: t.id,
-                                      email: accessStudent.email,
-                                      amount: 0,
-                                      paymentMethod: "Admin Granted"
-                                    });
-                                    toast.success(`Unlocked ${t.title}`);
-                                    setUserAccessList(prev => [...prev, t.id]);
-                                  } catch (e: any) {
-                                    toast.error(e.message || "Failed to unlock");
-                                  } finally {
-                                    setGrantingAccess(false);
-                                  }
-                                }}
-                                disabled={grantingAccess}
-                                className="bg-[#2c5f34] text-white hover:bg-[#1a3820] h-6 px-1.5 rounded text-[9px] font-bold cursor-pointer"
-                              >
-                                Unlock
-                              </Button>
-                            </>
-                          )}
-                        </div>
+
+                        {hasExamBundle ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleQuickRevokeAccess(exam.bundleId)}
+                            disabled={grantingAccess}
+                            className="w-full text-[10px] h-7 mt-2"
+                          >
+                            Revoke {exam.shortTitle} Bundle
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              if (!accessStudent) return;
+                              setGrantingAccess(true);
+                              try {
+                                await grantAccess({
+                                  userId: accessStudent.firebase_uid,
+                                  testId: exam.bundleId,
+                                  email: accessStudent.email,
+                                  amount: 0,
+                                  paymentMethod: "Admin Granted"
+                                });
+                                toast.success(`${exam.name} Full Bundle granted!`);
+                                setUserAccessList(prev => [...prev, exam.bundleId]);
+                              } catch (e: any) {
+                                toast.error(e.message || "Failed to grant");
+                              } finally {
+                                setGrantingAccess(false);
+                              }
+                            }}
+                            disabled={grantingAccess}
+                            className="w-full bg-[#2c5f34] text-white hover:bg-[#1a3820] text-[10px] h-7 mt-2"
+                          >
+                            Grant {exam.shortTitle} Bundle
+                          </Button>
+                        )}
                       </div>
                     );
                   })}
+              </div>
+
+              {/* Paper-by-Paper Status with Subject Grouping */}
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-bold text-[#1a3820]">
+                  Subjects & Mock Papers {selectedExamFilter !== 'all' ? `— ${selectedExamFilter}` : ''}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  Showing {
+                    (selectedExamFilter === 'all'
+                      ? tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_')
+                      : (allExamsList.find(e => e.id === selectedExamFilter)?.papers || [])
+                    ).length
+                  } Papers
+                </span>
+              </div>
+
+              {loadingAccessList ? (
+                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-[#2c5f34] animate-spin" /></div>
+              ) : (
+                <div className="space-y-3 max-h-[320px] overflow-y-auto border border-[#e0e8e2] rounded-xl p-2.5 bg-slate-50/50">
+                  {(() => {
+                    const renderPaperRow = (t: any) => {
+                      const isFree = isPaperFree(t);
+                      const isFirst6 = !isFree && first6TestIds.includes(t.id);
+                      
+                      const matchingExam = allExamsList.find(e => 
+                        e.papers.some((p: any) => p.id === t.id)
+                      ) || defaultAoExamItem;
+
+                      let status: 'free' | 'bundle-all' | 'bundle-exam' | 'bundle-6' | 'direct' | 'locked' = 'locked';
+                      if (isFree) status = 'free';
+                      else if (userAccessList.includes(-1)) status = 'bundle-all';
+                      else if (userAccessList.includes(matchingExam.bundleId)) status = 'bundle-exam';
+                      else if (userAccessList.includes(-2) && isFirst6) status = 'bundle-6';
+                      else if (userAccessList.includes(t.id)) status = 'direct';
+                      
+                      return (
+                        <div key={t.id} className="flex items-center justify-between p-2 bg-white border border-[#e0e8e2] rounded-lg text-xs gap-2 shadow-xs hover:border-emerald-300 transition-all">
+                          <div className="truncate flex-1 min-w-0">
+                            <span className="font-semibold text-[#1a3820] block truncate" title={t.title}>{t.title}</span>
+                            <span className="text-[9px] text-muted-foreground uppercase">{t.category || matchingExam.shortTitle}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {status === 'free' && (
+                              <Badge className="bg-emerald-50 text-emerald-700 border-none text-[9px] font-bold">Free Paper</Badge>
+                            )}
+                            {status === 'bundle-all' && (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">All-Pass</Badge>
+                            )}
+                            {status === 'bundle-exam' && (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">{matchingExam.shortTitle} Bundle</Badge>
+                            )}
+                            {status === 'bundle-6' && (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-none text-[9px] font-bold">6 Pkgs</Badge>
+                            )}
+                            {status === 'direct' && (
+                              <>
+                                <Badge className="bg-green-100 text-green-800 border-none text-[9px] font-bold">Unlocked (Direct)</Badge>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleQuickRevokeAccess(t.id)}
+                                  disabled={grantingAccess}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 h-6 px-1.5 rounded text-[9px] font-bold cursor-pointer"
+                                >
+                                  Revoke
+                                </Button>
+                              </>
+                            )}
+                            {status === 'locked' && (
+                              <>
+                                <Badge className="bg-slate-100 text-slate-500 border-none text-[9px] font-bold">Locked</Badge>
+                                <Button
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!accessStudent) return;
+                                    setGrantingAccess(true);
+                                    try {
+                                      await grantAccess({
+                                        userId: accessStudent.firebase_uid,
+                                        testId: t.id,
+                                        email: accessStudent.email,
+                                        amount: 0,
+                                        paymentMethod: "Admin Granted"
+                                      });
+                                      toast.success(`Unlocked ${t.title}`);
+                                      setUserAccessList(prev => [...prev, t.id]);
+                                    } catch (e: any) {
+                                      toast.error(e.message || "Failed to unlock");
+                                    } finally {
+                                      setGrantingAccess(false);
+                                    }
+                                  }}
+                                  disabled={grantingAccess}
+                                  className="bg-[#2c5f34] text-white hover:bg-[#1a3820] h-6 px-2 rounded text-[9px] font-bold cursor-pointer"
+                                >
+                                  Unlock
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    const getAoAaoSectionsForAdmin = (papers: any[]) => {
+                      const freePapers = papers.filter(t => isPaperFree(t));
+                      const paidPapers = papers.filter(t => !isPaperFree(t));
+
+                      const importantPapers = paidPapers.filter(t => t.category?.toLowerCase().includes('important'));
+                      const bscAgriPapers = paidPapers.filter(t => !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii') || t.title.toLowerCase().includes('bsc agri')));
+                      const gkPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk') || t.title.toLowerCase().includes('general knowledge') || t.title.toLowerCase().includes('gk')));
+                      const otherPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
+
+                      const sortFn = (a: any, b: any) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+
+                      return [
+                        { id: 'free', title: 'Free Practice Papers', papers: freePapers.sort(sortFn) },
+                        { id: 'important', title: 'Important Papers', papers: importantPapers.sort(sortFn) },
+                        { id: 'bsc_agri', title: 'BSc Agri(85%) – Paper II', papers: bscAgriPapers.sort(sortFn) },
+                        { id: 'gk', title: 'General Knowledge – Paper I', papers: gkPapers.sort(sortFn) },
+                        ...(otherPapers.length > 0 ? [{ id: 'other', title: 'Additional Mock Papers', papers: otherPapers.sort(sortFn) }] : [])
+                      ];
+                    };
+
+                    // 1. If AO / AAO is selected
+                    if (selectedExamFilter === 'AO / AAO' || selectedExamFilter === 'AO/AAO') {
+                      const sections = getAoAaoSectionsForAdmin(defaultAoExamItem.papers);
+                      return (
+                        <div className="space-y-3">
+                          {sections.map(sec => (
+                            sec.papers.length > 0 && (
+                              <div key={sec.id} className="space-y-1 bg-white/70 border border-[#e0e8e2] rounded-xl p-2">
+                                <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+                                  <span className="text-xs font-black text-[#1a3820] flex items-center gap-1.5">
+                                    <span>📁</span>
+                                    <span>{sec.title}</span>
+                                  </span>
+                                  <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold px-1.5 py-0">
+                                    {sec.papers.length} Papers
+                                  </Badge>
+                                </div>
+                                <div className="space-y-1 pt-1">
+                                  {sec.papers.map(t => renderPaperRow(t))}
+                                </div>
+                              </div>
+                            )
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    // 2. If a specific Custom Exam is selected
+                    if (selectedExamFilter !== 'all') {
+                      const exam = allExamsList.find(e => e.id === selectedExamFilter);
+                      if (!exam || exam.papers.length === 0) {
+                        return (
+                          <div className="text-center py-6 text-xs text-slate-500">
+                            No papers created under {selectedExamFilter} yet.
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="space-y-1">
+                          {exam.papers.map(t => renderPaperRow(t))}
+                        </div>
+                      );
+                    }
+
+                    // 3. If All Exams is selected: Show grouped by Exam and Subject
+                    return (
+                      <div className="space-y-4">
+                        {allExamsList.map(exam => {
+                          if (exam.papers.length === 0) return null;
+                          return (
+                            <div key={exam.id} className="space-y-2 bg-white/80 border border-[#e0e8e2] rounded-xl p-2.5">
+                              <div className="flex items-center justify-between pb-1.5 border-b border-slate-100">
+                                <span className="text-xs font-black text-[#1a3820] flex items-center gap-1.5">
+                                  <span>🎓</span>
+                                  <span>{exam.name}</span>
+                                </span>
+                                <Badge className="bg-slate-100 text-slate-700 text-[9px] font-bold px-2 py-0.5">
+                                  {exam.papers.length} Papers
+                                </Badge>
+                              </div>
+
+                              <div className="space-y-2">
+                                {exam.id === 'AO / AAO'
+                                  ? getAoAaoSectionsForAdmin(exam.papers).map(sec => (
+                                      sec.papers.length > 0 && (
+                                        <div key={sec.id} className="space-y-1 pl-2 border-l-2 border-emerald-300 ml-1">
+                                          <div className="text-[11px] font-bold text-slate-700 flex items-center justify-between pr-1">
+                                            <span>{sec.title}</span>
+                                            <span className="text-[9px] text-slate-500 font-semibold">({sec.papers.length})</span>
+                                          </div>
+                                          {sec.papers.map(t => renderPaperRow(t))}
+                                        </div>
+                                      )
+                                    ))
+                                  : (
+                                    <div className="space-y-1">
+                                      {exam.papers.map(t => renderPaperRow(t))}
+                                    </div>
+                                  )
+                                }
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

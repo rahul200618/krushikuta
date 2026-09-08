@@ -42,3 +42,9 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Scratch & Debug scripts
+*.mjs
+scratch/
+api-debug.log
+
+

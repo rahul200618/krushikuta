@@ -140,9 +140,9 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const routerState = useRouterState();
   const isAdminPage = routerState.location.pathname.startsWith('/admin');
-  const isExamPage = routerState.location.pathname.startsWith('/ao/aao');
+  const isExamPage = routerState.location.pathname.startsWith('/exam-dashboard') || routerState.location.pathname.startsWith('/ao/aao');
   const isAuthPage = routerState.location.pathname === '/ao/aao/auth';
-  const isExamDashboard = routerState.location.pathname === '/ao/aao' || routerState.location.pathname === '/ao/aao/';
+  const isExamDashboard = routerState.location.pathname === '/exam-dashboard' || routerState.location.pathname === '/exam-dashboard/' || routerState.location.pathname === '/ao/aao' || routerState.location.pathname === '/ao/aao/';
   const isExamSubPage = isExamPage && !isExamDashboard && !isAuthPage;
 
   return (

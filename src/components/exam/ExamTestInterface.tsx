@@ -3,8 +3,18 @@ import { useNavigate } from '@tanstack/react-router';
 import { getMockQuestions, startTest, submitTest } from '@/lib/exam-api';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Clock, ChevronLeft, ChevronRight, Send, SkipForward } from 'lucide-react';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from '@/components/ui/alert-dialog';
+import { Clock, ChevronLeft, ChevronRight, Send, SkipForward, BookOpen } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Question {
   id: number; question_text: string; options: string[];
@@ -61,32 +71,60 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
           }),
         ]);
 
-        const qs: Question[] = qRes.questions || [];
+        if (startRes?.error || (startRes as any)?.requires_payment) {
+          toast.error(startRes.error || "Access Denied: Please unlock premium to attend this test.");
+          navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
+          return;
+        }
+
+        const rawQs = qRes.questions || [];
+        const qs: Question[] = rawQs.map((q: any) => {
+          let opts = q.options;
+          if (typeof opts === 'string') {
+            try {
+              opts = JSON.parse(opts);
+            } catch {
+              opts = [opts];
+            }
+          }
+          return {
+            ...q,
+            options: Array.isArray(opts) ? opts : [],
+          };
+        });
         setQuestions(qs);
 
-        const savedRaw = localStorage.getItem(getStorageKey(userId, testId));
-        if (savedRaw) {
-          try {
-            const saved = JSON.parse(savedRaw);
-            setAnswers(saved.answers || {});
-            setTimeElapsed(saved.timeElapsed ?? 0);
-            setSubmissionId(saved.submissionId ?? startRes.submissionId);
-            setVisitedSet(new Set(Object.keys(saved.answers || {}).map(Number)));
-            return;
-          } catch { /* fresh start */ }
+        if (typeof window !== 'undefined') {
+          const savedRaw = localStorage.getItem(getStorageKey(userId, testId));
+          if (savedRaw) {
+            try {
+              const saved = JSON.parse(savedRaw);
+              setAnswers(saved.answers || {});
+              setTimeElapsed(saved.timeElapsed ?? 0);
+              setSubmissionId(saved.submissionId ?? startRes.submissionId);
+              setVisitedSet(new Set(Object.keys(saved.answers || {}).map(Number)));
+              return;
+            } catch { /* fresh start */ }
+          }
         }
         setSubmissionId(startRes.submissionId);
         setTimeElapsed(0);
-      } catch { /* silent */ } finally {
+      } catch (err: any) {
+        console.error('[ExamTestInterface] Init failed:', err);
+        toast.error(err.message || "Access Denied: Please unlock premium to attend this test.");
+        navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
+      } finally {
         setLoading(false);
         // Auto-enter fullscreen silently
-        document.documentElement.requestFullscreen?.().then(() => {
-          setIsFullscreen(true);
-        }).catch(() => {});
+        if (typeof document !== 'undefined') {
+          document.documentElement.requestFullscreen?.().then(() => {
+            setIsFullscreen(true);
+          }).catch(() => {});
+        }
       }
     };
     init();
-  }, [testId, userId]);
+  }, [testId, userId, navigate, userProfile]);
 
   // Timer count-up (no time limit)
   useEffect(() => {
@@ -99,7 +137,7 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
 
   // Autosave
   useEffect(() => {
-    if (!submissionId || loading) return;
+    if (!submissionId || loading || typeof window === 'undefined') return;
     const key = getStorageKey(userId, testId);
     localStorage.setItem(key, JSON.stringify({ answers, timeElapsed, submissionId }));
   }, [answers, timeElapsed, submissionId]);
@@ -114,7 +152,9 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
     if (!submissionId) return;
     setSubmitting(true);
     try {
-      localStorage.removeItem(getStorageKey(userId, testId));
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(getStorageKey(userId, testId));
+      }
       const answersWithTime = { ...answers, _time_taken: timeElapsed };
       await submitTest(submissionId, testId, answersWithTime as any);
       navigate({ to: `/ao/aao/report/${submissionId}` as any });
@@ -122,6 +162,7 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
   };
 
   const handleAnswerSelect = (optionIdx: number) => {
+    if (!questions[currentIdx]) return;
     const qId = questions[currentIdx].id;
     setAnswers(prev => ({ ...prev, [qId]: optionIdx }));
     setVisitedSet(prev => new Set(prev).add(currentIdx));
@@ -160,8 +201,8 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
   };
 
   const stateColors: Record<QuestionState, string> = {
-    current: 'bg-blue-500 text-white border-blue-500',
-    answered: 'bg-green-500 text-white border-green-500',
+    current: 'bg-emerald-600 text-white border-emerald-600',
+    answered: 'bg-emerald-500 text-white border-emerald-500',
     visited: 'bg-amber-400 text-white border-amber-400',
     unvisited: 'bg-muted text-muted-foreground border-border',
   };
@@ -174,9 +215,26 @@ export function ExamTestInterface({ testId, userId, userProfile, durationMinutes
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center space-y-4">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground font-medium">Loading exam...</p>
+          <div className="w-12 h-12 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-muted-foreground font-medium text-sm">Preparing exam environment...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (!loading && questions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center mb-4">
+          <BookOpen className="w-6 h-6" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">No Questions Available Yet</h2>
+        <p className="text-sm text-slate-500 max-w-md mb-6">
+          The questions for this mock test are currently being finalized. Please check back shortly or explore other mock papers.
+        </p>
+        <Button onClick={() => navigate({ to: '/ao/aao' as any })} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+          Back to Exam Dashboard
+        </Button>
       </div>
     );
   }

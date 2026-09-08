@@ -217,3 +217,10 @@
   .shadow-gold { box-shadow: var(--shadow-gold); }
   .animate-float { animation: float 4s ease-in-out infinite; }
 }
+
+body.hide-site-header header {
+  display: none !important;
+}
+body.hide-site-header main {
+  padding-top: 0.5rem !important;
+}

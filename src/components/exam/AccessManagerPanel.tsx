@@ -198,9 +198,15 @@ export function AccessManagerPanel() {
                 <Select value={grantTestId} onValueChange={setGrantTestId} required>
                   <SelectTrigger><SelectValue placeholder="Choose a test..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="-1">🔓 All-Access Bundle (Test ID: -1)</SelectItem>
-                    <SelectItem value="-2">🔓 First 6 Paper Releases (Test ID: -2)</SelectItem>
-                    {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => <SelectItem key={t.id} value={String(t.id)}>{t.title} (₹{t.price})</SelectItem>)}
+                    <SelectItem value="-1">🔓 All-Access Bundle (All Exams & Papers) (ID: -1)</SelectItem>
+                    <SelectItem value="-101">🌾 AO / AAO Full Subject Access (ID: -101)</SelectItem>
+                    <SelectItem value="-102">🌿 AHO / ADH Full Subject Access (ID: -102)</SelectItem>
+                    <SelectItem value="-2">🔓 First 6 Paper Releases (ID: -2)</SelectItem>
+                    {tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_').map(t => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        [{t.category || 'General'}] {t.title} {t.is_free ? '(Free)' : `(₹${t.price})`}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -224,7 +230,7 @@ export function AccessManagerPanel() {
                 <thead className="bg-muted/40 text-muted-foreground text-xs uppercase">
                   <tr>
                     <th className="px-5 py-3 text-left">Student</th>
-                    <th className="px-5 py-3 text-left">Test ID</th>
+                    <th className="px-5 py-3 text-left">Test / Bundle</th>
                     <th className="px-5 py-3 text-left">Method</th>
                     <th className="px-5 py-3 text-left">Status</th>
                     <th className="px-5 py-3 text-center">Action</th>
@@ -239,7 +245,19 @@ export function AccessManagerPanel() {
                         <div className="font-medium text-xs">{p.email || '—'}</div>
                         <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[160px]">{p.user_id}</div>
                       </td>
-                      <td className="px-5 py-3 font-bold">{p.mock_test_id === -1 ? '★ All' : `#${p.mock_test_id}`}</td>
+                      <td className="px-5 py-3 font-semibold text-xs">
+                        {p.mock_test_id === -1 ? (
+                          <span className="text-purple-600 font-bold">★ All Exams Bundle</span>
+                        ) : p.mock_test_id === -101 ? (
+                          <span className="text-emerald-700 font-bold">🌾 AO/AAO Bundle</span>
+                        ) : p.mock_test_id === -102 ? (
+                          <span className="text-teal-700 font-bold">🌿 AHO/ADH Bundle</span>
+                        ) : p.mock_test_id === -2 ? (
+                          <span className="text-amber-700 font-bold">★ First 6 Papers</span>
+                        ) : (
+                          `#${p.mock_test_id}`
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-xs">{p.payment_method}</td>
                       <td className="px-5 py-3">
                         <Badge className={`text-[10px] ${p.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>

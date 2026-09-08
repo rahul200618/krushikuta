@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as ResultsRouteImport } from './routes/results'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as GovtExamsRouteImport } from './routes/govt-exams'
+import { Route as ExamDashboardRouteImport } from './routes/exam-dashboard'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as BlogRouteImport } from './routes/blog'
@@ -55,6 +57,16 @@ const ResultsRoute = ResultsRouteImport.update({
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GovtExamsRoute = GovtExamsRouteImport.update({
+  id: '/govt-exams',
+  path: '/govt-exams',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExamDashboardRoute = ExamDashboardRouteImport.update({
+  id: '/exam-dashboard',
+  path: '/exam-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CoursesRoute = CoursesRouteImport.update({
@@ -222,6 +234,8 @@ export interface FileRoutesByFullPath {
   '/blog': typeof BlogRouteWithChildren
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
+  '/exam-dashboard': typeof ExamDashboardRoute
+  '/govt-exams': typeof GovtExamsRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
@@ -255,6 +269,8 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
+  '/exam-dashboard': typeof ExamDashboardRoute
+  '/govt-exams': typeof GovtExamsRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/ao/aao': typeof AoAaoRoute
@@ -289,6 +305,8 @@ export interface FileRoutesById {
   '/blog': typeof BlogRouteWithChildren
   '/contact': typeof ContactRoute
   '/courses': typeof CoursesRoute
+  '/exam-dashboard': typeof ExamDashboardRoute
+  '/govt-exams': typeof GovtExamsRoute
   '/register': typeof RegisterRoute
   '/results': typeof ResultsRoute
   '/services': typeof ServicesRouteWithChildren
@@ -325,6 +343,8 @@ export interface FileRouteTypes {
     | '/blog'
     | '/contact'
     | '/courses'
+    | '/exam-dashboard'
+    | '/govt-exams'
     | '/register'
     | '/results'
     | '/services'
@@ -358,6 +378,8 @@ export interface FileRouteTypes {
     | '/admin'
     | '/contact'
     | '/courses'
+    | '/exam-dashboard'
+    | '/govt-exams'
     | '/register'
     | '/results'
     | '/ao/aao'
@@ -391,6 +413,8 @@ export interface FileRouteTypes {
     | '/blog'
     | '/contact'
     | '/courses'
+    | '/exam-dashboard'
+    | '/govt-exams'
     | '/register'
     | '/results'
     | '/services'
@@ -426,6 +450,8 @@ export interface RootRouteChildren {
   BlogRoute: typeof BlogRouteWithChildren
   ContactRoute: typeof ContactRoute
   CoursesRoute: typeof CoursesRoute
+  ExamDashboardRoute: typeof ExamDashboardRoute
+  GovtExamsRoute: typeof GovtExamsRoute
   RegisterRoute: typeof RegisterRoute
   ResultsRoute: typeof ResultsRoute
   ServicesRoute: typeof ServicesRouteWithChildren
@@ -458,6 +484,20 @@ declare module '@tanstack/react-router' {
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/govt-exams': {
+      id: '/govt-exams'
+      path: '/govt-exams'
+      fullPath: '/govt-exams'
+      preLoaderRoute: typeof GovtExamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/exam-dashboard': {
+      id: '/exam-dashboard'
+      path: '/exam-dashboard'
+      fullPath: '/exam-dashboard'
+      preLoaderRoute: typeof ExamDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/courses': {
@@ -726,6 +766,8 @@ const rootRouteChildren: RootRouteChildren = {
   BlogRoute: BlogRouteWithChildren,
   ContactRoute: ContactRoute,
   CoursesRoute: CoursesRoute,
+  ExamDashboardRoute: ExamDashboardRoute,
+  GovtExamsRoute: GovtExamsRoute,
   RegisterRoute: RegisterRoute,
   ResultsRoute: ResultsRoute,
   ServicesRoute: ServicesRouteWithChildren,

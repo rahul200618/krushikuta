@@ -30,7 +30,8 @@ const navLinks = [
   { to: "/about", label: "About" },
   { to: "/services", label: "Services" },
   { to: "/results", label: "Results" },
-  { to: "/ao/aao", label: "AO/AAO" },
+  { to: "/exam-dashboard", label: "Exam Dashboard" },
+  { to: "/govt-exams", label: "Govt Exams" },
   { to: "/blog", label: "Blog" },
   { to: "/contact", label: "Contact" },
 ] as const;
@@ -65,7 +66,7 @@ export function Navbar({ isExamPage }: { isExamPage?: boolean }) {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate({ to: "/ao/aao" });
+    navigate({ to: "/exam-dashboard" });
   };
 
   return (
@@ -89,7 +90,7 @@ export function Navbar({ isExamPage }: { isExamPage?: boolean }) {
             <Link
               key={l.to}
               to={l.to}
-              target={l.to === "/ao/aao" ? "_blank" : undefined}
+              target={l.to === "/exam-dashboard" ? "_blank" : undefined}
               className="px-3 py-2 text-sm font-medium text-foreground/80 hover:text-primary rounded-md transition-colors"
               activeProps={{ className: "text-primary" }}
               activeOptions={{ exact: l.to === "/" }}
@@ -122,7 +123,7 @@ export function Navbar({ isExamPage }: { isExamPage?: boolean }) {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => navigate({ to: "/ao/aao" as any })} className="cursor-pointer">
+                    <DropdownMenuItem onClick={() => navigate({ to: "/exam-dashboard" as any })} className="cursor-pointer">
                       <Settings className="w-4 h-4 mr-2" />
                       Settings
                     </DropdownMenuItem>
