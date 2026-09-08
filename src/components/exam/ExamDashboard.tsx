@@ -299,61 +299,174 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
     );
   }
 
-  // Helper to categorize AO / AAO papers into the 4 requested sections
-  const getAoAaoSections = (papers: MockTest[]) => {
-    const freePapers = papers.filter(t => isPaperFree(t));
-    const paidPapers = papers.filter(t => !isPaperFree(t));
+  // ── DYNAMIC SUBJECT SECTIONS SYSTEM ──────────────────────
+  interface SubjectSection {
+    id: string;
+    title: string;
+    badge: string;
+    isFree: boolean;
+    description: string;
+    papers: MockTest[];
+  }
 
-    const importantPapers = paidPapers.filter(t => t.category?.toLowerCase().includes('important'));
-    const bscAgriPapers = paidPapers.filter(t => !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii') || t.title.toLowerCase().includes('bsc agri')));
-    const gkPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk') || t.title.toLowerCase().includes('general knowledge') || t.title.toLowerCase().includes('gk')));
-    const otherPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
-
+  const getExamSubjectSections = (exam: DynamicExam, filteredPapers: MockTest[]): SubjectSection[] => {
+    const isAoAao = exam.id === 'AO / AAO' || exam.id === 'AO/AAO';
     const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 
-    return [
-      {
+    // Find custom subject section rows created for this exam (_SUBJECT_SECTION_)
+    const customSubjectRows = tests.filter(
+      t => t.title === '_SUBJECT_SECTION_' && t.category?.toLowerCase().trim() === exam.shortTitle.toLowerCase().trim()
+    );
+
+    const customSections: SubjectSection[] = customSubjectRows.map(row => {
+      let meta: any = {};
+      try {
+        if (row.description && row.description.startsWith('{')) {
+          meta = JSON.parse(row.description);
+        }
+      } catch (e) { /* ignore */ }
+
+      const title = meta.name || row.category || 'Subject Section';
+      return {
+        id: `custom_${row.id}`,
+        title: title,
+        badge: meta.badge || (row.is_free ? 'Free Access' : 'Core Subject Mocks'),
+        isFree: !!row.is_free,
+        description: meta.subtitle || 'Custom subject mock test series',
+        papers: []
+      };
+    });
+
+    if (isAoAao) {
+      const freePapers = filteredPapers.filter(t => isPaperFree(t));
+      const paidPapers = filteredPapers.filter(t => !isPaperFree(t));
+
+      // Check if any paid papers match custom sections
+      const remainingPaid: MockTest[] = [];
+      paidPapers.forEach(p => {
+        const matchedCustom = customSections.find(
+          s => p.category?.toLowerCase().trim() === s.title.toLowerCase().trim() ||
+               p.category?.toLowerCase().trim() === `${exam.shortTitle}::${s.title}`.toLowerCase().trim()
+        );
+        if (matchedCustom) {
+          matchedCustom.papers.push(p);
+        } else {
+          remainingPaid.push(p);
+        }
+      });
+
+      const importantPapers = remainingPaid.filter(t => t.category?.toLowerCase().includes('important'));
+      const bscAgriPapers = remainingPaid.filter(t => !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii') || t.title.toLowerCase().includes('bsc agri')));
+      const gkPapers = remainingPaid.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk') || t.title.toLowerCase().includes('general knowledge') || t.title.toLowerCase().includes('gk')));
+      const otherPapers = remainingPaid.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
+
+      customSections.forEach(s => s.papers.sort(sortFn));
+
+      return [
+        {
+          id: 'free',
+          title: 'Free Practice Papers',
+          badge: 'Free Access',
+          isFree: true,
+          description: 'Available immediately to all registered students without subscription',
+          papers: freePapers.sort(sortFn)
+        },
+        {
+          id: 'important',
+          title: 'Important Papers',
+          badge: 'High Yield Series',
+          isFree: false,
+          description: 'Comprehensive high-priority question sets for General Knowledge and BSc Agri',
+          papers: importantPapers.sort(sortFn)
+        },
+        {
+          id: 'bsc_agri',
+          title: 'BSc Agri(85%) – Paper II',
+          badge: 'Core Subject Mocks',
+          isFree: false,
+          description: '100 marks full-syllabus Agriculture discipline mock test series',
+          papers: bscAgriPapers.sort(sortFn)
+        },
+        {
+          id: 'gk',
+          title: 'General Knowledge – Paper I',
+          badge: 'General Paper Mocks',
+          isFree: false,
+          description: 'Karnataka state general studies, current affairs, and mental ability series',
+          papers: gkPapers.sort(sortFn)
+        },
+        ...customSections,
+        ...(otherPapers.length > 0 ? [{
+          id: 'other',
+          title: 'Additional Mock Papers',
+          badge: 'Additional Sets',
+          isFree: false,
+          description: 'Other mock papers and practice tests under AO / AAO',
+          papers: otherPapers.sort(sortFn)
+        }] : [])
+      ];
+    } else {
+      // Dynamic Exams (e.g. AHO / ADH, etc.)
+      const freeSection: SubjectSection = {
         id: 'free',
         title: 'Free Practice Papers',
         badge: 'Free Access',
+        isFree: true,
         description: 'Available immediately to all registered students without subscription',
-        papers: freePapers.sort(sortFn)
-      },
-      {
-        id: 'important',
-        title: 'Important Papers',
-        badge: 'High Yield Series',
-        description: 'Comprehensive high-priority question sets for General Knowledge and BSc Agri',
-        papers: importantPapers.sort(sortFn)
-      },
-      {
-        id: 'bsc_agri',
-        title: 'BSc Agri(85%) – Paper II',
-        badge: 'Core Subject Mocks',
-        description: '100 marks full-syllabus Agriculture discipline mock test series',
-        papers: bscAgriPapers.sort(sortFn)
-      },
-      {
-        id: 'gk',
-        title: 'General Knowledge – Paper I',
-        badge: 'General Paper Mocks',
-        description: 'Karnataka state general studies, current affairs, and mental ability series',
-        papers: gkPapers.sort(sortFn)
-      },
-      ...(otherPapers.length > 0 ? [{
-        id: 'other',
-        title: 'Additional Mock Papers',
-        badge: 'Additional Sets',
-        description: 'Other mock papers and practice tests under AO / AAO',
-        papers: otherPapers.sort(sortFn)
-      }] : [])
-    ];
+        papers: []
+      };
+
+      if (customSections.length > 0) {
+        filteredPapers.forEach(paper => {
+          if (isPaperFree(paper) || paper.is_free || paper.price === 0) {
+            freeSection.papers.push(paper);
+            return;
+          }
+          const matchedCustom = customSections.find(
+            s => paper.category?.toLowerCase().trim() === s.title.toLowerCase().trim() ||
+                 paper.category?.toLowerCase().trim() === `${exam.shortTitle}::${s.title}`.toLowerCase().trim() ||
+                 paper.category?.toLowerCase().includes(s.title.toLowerCase())
+          );
+          if (matchedCustom) {
+            matchedCustom.papers.push(paper);
+          } else {
+            customSections[0].papers.push(paper);
+          }
+        });
+
+        freeSection.papers.sort(sortFn);
+        customSections.forEach(s => s.papers.sort(sortFn));
+
+        return [freeSection, ...customSections];
+      } else {
+        const freePapers = filteredPapers.filter(t => isPaperFree(t) || t.is_free || t.price === 0);
+        const paidPapers = filteredPapers.filter(t => !isPaperFree(t) && !t.is_free && t.price > 0);
+
+        return [
+          {
+            id: 'free',
+            title: 'Free Practice Papers',
+            badge: 'Free Access',
+            isFree: true,
+            description: 'Available immediately to all registered students without subscription',
+            papers: freePapers.sort(sortFn)
+          },
+          {
+            id: 'paid',
+            title: 'Subscription / Paid Papers',
+            badge: 'Package Series',
+            isFree: false,
+            description: `Unlocked via ${exam.shortTitle} subject subscription or All-Access bundle`,
+            papers: paidPapers.sort(sortFn)
+          }
+        ];
+      }
+    }
   };
 
   // ── VIEW: INSIDE A SPECIFIC EXAM ─────────────────────────
   if (selectedSubject) {
     const currentExam = dynamicExamsList.find(d => d.id === selectedSubject) || dynamicExamsList[0];
-    const isAoAao = currentExam.id === 'AO / AAO' || currentExam.id === 'AO/AAO';
     let examPapers = currentExam.papers;
 
     if (paperFilterTab === 'free') {
@@ -367,7 +480,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
       examPapers = examPapers.filter(t => t.title.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q)));
     }
 
-    const aoSections = isAoAao ? getAoAaoSections(examPapers) : [];
+    const examSections = getExamSubjectSections(currentExam, examPapers);
 
     const renderTestRow = (test: MockTest, index: number) => {
       const status = getTestStatus(test);
@@ -517,7 +630,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
           </div>
         </div>
 
-        {/* Papers Display: Vertical List Format (One Below Other in Category Cards) */}
+        {/* Papers Display: Vertical Cards One Below Other */}
         {examPapers.length === 0 ? (
           <div className="text-center py-12 bg-slate-50 dark:bg-slate-900/40 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
             <BookOpen className="w-8 h-8 text-slate-400 mx-auto mb-2" />
@@ -528,11 +641,10 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
               </Button>
             )}
           </div>
-        ) : isAoAao ? (
-          // ── AO / AAO 4 SECTIONS AS INTERACTIVE CARDS ONE BELOW OTHER ──
+        ) : (
           <div className="space-y-3.5 sm:space-y-4">
-            {aoSections.map((sec) => {
-              if (sec.papers.length === 0) return null;
+            {examSections.map((sec) => {
+              if (sec.papers.length === 0 && paperFilterTab !== 'all') return null;
               const isExpanded = expandedSectionIds.includes(sec.id);
 
               return (
@@ -567,15 +679,19 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
                             {sec.title}
                           </h3>
                           <Badge className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            sec.id === 'free'
+                            sec.isFree
                               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200'
                               : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200'
                           }`}>
                             {sec.papers.length} Papers
                           </Badge>
-                          {sec.id === 'free' && (
+                          {sec.isFree ? (
                             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                               Free Access
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200 hidden sm:inline-block">
+                              {sec.badge}
                             </span>
                           )}
                         </div>
@@ -601,20 +717,19 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
                   {/* Card Body: List of papers inside this card */}
                   {isExpanded && (
                     <div className="p-4 sm:p-5 pt-0 sm:pt-0 space-y-2 border-t border-slate-100 dark:border-slate-800 mt-1">
-                      <div className="pt-3 space-y-2">
-                        {sec.papers.map((test, index) => renderTestRow(test, index))}
-                      </div>
+                      {sec.papers.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">No papers available under this section.</p>
+                      ) : (
+                        <div className="pt-3 space-y-2">
+                          {sec.papers.map((test, index) => renderTestRow(test, index))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </Card>
               );
             })}
           </div>
-        ) : (
-          // ── OTHER DYNAMIC EXAMS LIST INSIDE CARD ──
-          <Card className="p-4 sm:p-5 bg-white dark:bg-card border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl shadow-[0_2px_12px_rgba(0,0,0,0.02)] space-y-2">
-            {examPapers.map((test, index) => renderTestRow(test, index))}
-          </Card>
         )}
       </div>
     );

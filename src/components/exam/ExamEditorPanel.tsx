@@ -91,6 +91,16 @@ export function ExamEditorPanel() {
     price: '3000'
   });
 
+  // Subject / Section modals state
+  const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<{ id?: number; name: string; subtitle: string; badge: string; isFree: boolean; examName: string } | null>(null);
+  const [subjectForm, setSubjectForm] = useState({
+    name: '',
+    subtitle: '',
+    badge: 'Core Subject Mocks',
+    is_free: false
+  });
+
   const [paperDialogOpen, setPaperDialogOpen] = useState(false);
   const [editingPaper, setEditingPaper] = useState<MockTest | null>(null);
   const [paperForm, setPaperForm] = useState({
@@ -107,6 +117,7 @@ export function ExamEditorPanel() {
   });
 
   const [confirmDeleteExam, setConfirmDeleteExam] = useState<string | null>(null);
+  const [confirmDeleteSubject, setConfirmDeleteSubject] = useState<{ id: number; name: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'test' | 'question'; id: number } | null>(null);
 
   // Question modals
@@ -229,74 +240,265 @@ export function ExamEditorPanel() {
     e.paidPapers.sort((a, b) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' }));
   });
 
-  // Helper to categorize AO / AAO papers into the 4 requested sections
-  const getAoAaoSections = () => {
-    const allAoPapers = [...defaultAoExam.freePapers, ...defaultAoExam.paidPapers];
-    
-    // 1. Free Practice Papers
-    const freePapers = allAoPapers.filter(t => t.is_free || (t.category === 'General Paper' || t.category === 'core papers'));
-    
-    // 2. Important Papers
-    const importantPapers = allAoPapers.filter(t => !freePapers.includes(t) && t.category?.toLowerCase().includes('important'));
-    
-    // 3. BSc Agri(85%)–Paper II
-    const bscAgriPapers = allAoPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii')));
-    
-    // 4. General Knowledge–Paper I
-    const gkPapers = allAoPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk')));
-    
-    // 5. Remaining / Other papers under AO/AAO (if any)
-    const otherPapers = allAoPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
+  // ── DYNAMIC SUBJECT & SECTION SYSTEM ──────────────────────
+  interface SubjectSection {
+    id: string;
+    title: string;
+    categoryTag: string;
+    badge: string;
+    isFree: boolean;
+    description: string;
+    papers: MockTest[];
+    isCustom?: boolean;
+    sectionTestId?: number;
+  }
 
-    const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+  const getExamSubjectSections = (exam: ExamGroup): SubjectSection[] => {
+    const isAoAao = exam.id === 'AO / AAO' || exam.id === 'AO/AAO';
+    const allExamPapers = [...exam.freePapers, ...exam.paidPapers];
 
-    return [
-      {
-        id: 'free',
-        title: 'Free Practice Papers',
-        categoryTag: 'General Paper',
-        badge: 'Free Access',
-        isFree: true,
-        description: 'Available immediately to all registered students without subscription',
-        papers: freePapers.sort(sortFn)
-      },
-      {
-        id: 'important',
-        title: 'Important Papers',
-        categoryTag: 'IMPORTANT PAPERS',
-        badge: 'High Yield Series',
-        isFree: false,
-        description: 'Comprehensive high-priority question sets for General Knowledge and BSc Agri',
-        papers: importantPapers.sort(sortFn)
-      },
-      {
-        id: 'bsc_agri',
-        title: 'BSc Agri(85%) – Paper II',
-        categoryTag: 'BSc Agri(85%)-Paper II',
-        badge: 'Core Subject Mocks',
-        isFree: false,
-        description: '100 marks full-syllabus Agriculture discipline mock test series',
-        papers: bscAgriPapers.sort(sortFn)
-      },
-      {
-        id: 'gk',
-        title: 'General Knowledge – Paper I',
-        categoryTag: 'General Knowledge-Paper I',
-        badge: 'General Paper Mocks',
-        isFree: false,
-        description: 'Karnataka state general studies, current affairs, and mental ability series',
-        papers: gkPapers.sort(sortFn)
-      },
-      ...(otherPapers.length > 0 ? [{
-        id: 'other',
-        title: 'Additional Mock Papers',
-        categoryTag: 'AO/AAO',
-        badge: 'Additional Sets',
-        isFree: false,
-        description: 'Other mock papers and practice tests under AO / AAO',
-        papers: otherPapers.sort(sortFn)
-      }] : [])
-    ];
+    // Find custom subject section rows created for this exam (_SUBJECT_SECTION_)
+    const customSubjectRows = tests.filter(
+      t => t.title === '_SUBJECT_SECTION_' && t.category?.toLowerCase().trim() === exam.name.toLowerCase().trim()
+    );
+
+    const customSubjects: SubjectSection[] = customSubjectRows.map(row => {
+      let meta: any = {};
+      try {
+        if (row.description && row.description.startsWith('{')) {
+          meta = JSON.parse(row.description);
+        }
+      } catch (e) { /* ignore */ }
+
+      const title = meta.name || row.category || 'Subject Section';
+      return {
+        id: `custom_${row.id}`,
+        title: title,
+        categoryTag: `${exam.name}::${title}`,
+        badge: meta.badge || (row.is_free ? 'Free Access' : 'Core Subject Mocks'),
+        isFree: !!row.is_free,
+        description: meta.subtitle || 'Custom subject mock test series',
+        papers: [],
+        isCustom: true,
+        sectionTestId: row.id
+      };
+    });
+
+    let sections: SubjectSection[] = [];
+
+    if (isAoAao) {
+      // 1. Free Practice Papers
+      const freePapers = allExamPapers.filter(t => t.is_free || (t.category === 'General Paper' || t.category === 'core papers'));
+      // 2. Important Papers
+      const importantPapers = allExamPapers.filter(t => !freePapers.includes(t) && t.category?.toLowerCase().includes('important'));
+      // 3. BSc Agri(85%)–Paper II
+      const bscAgriPapers = allExamPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii')));
+      // 4. General Knowledge–Paper I
+      const gkPapers = allExamPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk')));
+      // 5. Remaining papers
+      const otherPapers = allExamPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
+
+      const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+
+      sections = [
+        {
+          id: 'free',
+          title: 'Free Practice Papers',
+          categoryTag: 'General Paper',
+          badge: 'Free Access',
+          isFree: true,
+          description: 'Available immediately to all registered students without subscription',
+          papers: freePapers.sort(sortFn)
+        },
+        {
+          id: 'important',
+          title: 'Important Papers',
+          categoryTag: 'IMPORTANT PAPERS',
+          badge: 'High Yield Series',
+          isFree: false,
+          description: 'Comprehensive high-priority question sets for General Knowledge and BSc Agri',
+          papers: importantPapers.sort(sortFn)
+        },
+        {
+          id: 'bsc_agri',
+          title: 'BSc Agri(85%) – Paper II',
+          categoryTag: 'BSc Agri(85%)-Paper II',
+          badge: 'Core Subject Mocks',
+          isFree: false,
+          description: '100 marks full-syllabus Agriculture discipline mock test series',
+          papers: bscAgriPapers.sort(sortFn)
+        },
+        {
+          id: 'gk',
+          title: 'General Knowledge – Paper I',
+          categoryTag: 'General Knowledge-Paper I',
+          badge: 'General Paper Mocks',
+          isFree: false,
+          description: 'Karnataka state general studies, current affairs, and mental ability series',
+          papers: gkPapers.sort(sortFn)
+        },
+        ...customSubjects,
+        ...(otherPapers.length > 0 ? [{
+          id: 'other',
+          title: 'Additional Mock Papers',
+          categoryTag: 'AO/AAO',
+          badge: 'Additional Sets',
+          isFree: false,
+          description: 'Other mock papers and practice tests under AO / AAO',
+          papers: otherPapers.sort(sortFn)
+        }] : [])
+      ];
+    } else {
+      // Dynamic Exams (e.g. AHO/ADH)
+      if (customSubjects.length > 0) {
+        // Distribute papers across free and custom subjects
+        const freeSection: SubjectSection = {
+          id: 'free',
+          title: 'Free Practice Papers',
+          categoryTag: `${exam.name}::Free Practice Papers`,
+          badge: 'Free Access',
+          isFree: true,
+          description: 'Available immediately to all registered students without subscription',
+          papers: []
+        };
+
+        const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+
+        allExamPapers.forEach(paper => {
+          if (paper.is_free || paper.price === 0) {
+            freeSection.papers.push(paper);
+            return;
+          }
+          const matchedCustom = customSubjects.find(
+            s => paper.category?.toLowerCase().trim() === s.title.toLowerCase().trim() ||
+                 paper.category?.toLowerCase().trim() === s.categoryTag.toLowerCase().trim()
+          );
+          if (matchedCustom) {
+            matchedCustom.papers.push(paper);
+          } else {
+            // Put in first custom or free
+            customSubjects[0].papers.push(paper);
+          }
+        });
+
+        freeSection.papers.sort(sortFn);
+        customSubjects.forEach(s => s.papers.sort(sortFn));
+
+        sections = [freeSection, ...customSubjects];
+      } else {
+        // Default 2 sections when no custom subjects are added yet
+        const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
+        sections = [
+          {
+            id: 'free',
+            title: 'Free Practice Papers',
+            categoryTag: `${exam.name}::Free Practice Papers`,
+            badge: 'Free Access',
+            isFree: true,
+            description: 'Available immediately to all registered students without subscription',
+            papers: exam.freePapers.sort(sortFn)
+          },
+          {
+            id: 'paid',
+            title: 'Subscription / Paid Papers',
+            categoryTag: exam.name,
+            badge: 'Package Series',
+            isFree: false,
+            description: `Unlocked via ${exam.name} subject subscription (₹${exam.price}) or All-Access bundle`,
+            papers: exam.paidPapers.sort(sortFn)
+          }
+        ];
+      }
+    }
+
+    return sections;
+  };
+
+  // Handlers for Subject Creation & Editing
+  const openAddSubject = (examName: string) => {
+    setEditingSubject(null);
+    setSubjectForm({
+      name: '',
+      subtitle: '',
+      badge: 'Core Subject Mocks',
+      is_free: false
+    });
+    setSubjectDialogOpen(true);
+  };
+
+  const openEditSubject = (subject: SubjectSection, examName: string) => {
+    setEditingSubject({
+      id: subject.sectionTestId,
+      name: subject.title,
+      subtitle: subject.description,
+      badge: subject.badge,
+      isFree: subject.isFree,
+      examName: examName
+    });
+    setSubjectForm({
+      name: subject.title,
+      subtitle: subject.description,
+      badge: subject.badge,
+      is_free: subject.isFree
+    });
+    setSubjectDialogOpen(true);
+  };
+
+  const handleSaveSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = subjectForm.name.trim();
+    if (!name) {
+      toast.error('Subject title is required');
+      return;
+    }
+    const activeExam = examsList.find(e => e.id === selectedExamId) || defaultAoExam;
+    const examName = activeExam.name;
+    const descObj = {
+      name,
+      subtitle: subjectForm.subtitle.trim(),
+      badge: subjectForm.badge.trim() || 'Core Subject Mocks',
+      isFree: subjectForm.is_free
+    };
+
+    setLoading(true);
+    try {
+      const payload = {
+        ...(editingSubject?.id ? { id: editingSubject.id } : {}),
+        title: '_SUBJECT_SECTION_',
+        category: examName,
+        description: JSON.stringify(descObj),
+        price: subjectForm.is_free ? 0 : activeExam.price,
+        is_free: subjectForm.is_free,
+        is_active: true
+      };
+      const res = await saveMockTest(payload);
+      if (editingSubject?.id) {
+        setTests(p => p.map(t => t.id === res.test.id ? res.test : t));
+        toast.success(`Subject "${name}" updated successfully!`);
+      } else {
+        setTests(p => [res.test, ...p]);
+        toast.success(`Subject "${name}" added to ${examName}!`);
+      }
+      setSubjectDialogOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save subject');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSubject = async (sectionTestId: number, subjectName: string) => {
+    setLoading(true);
+    try {
+      await deleteMockTest(sectionTestId);
+      setTests(p => p.filter(t => t.id !== sectionTestId));
+      toast.success(`Subject "${subjectName}" deleted.`);
+      setConfirmDeleteSubject(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete subject');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handlers for Exam Creation & Editing
@@ -386,7 +588,7 @@ export function ExamEditorPanel() {
   const handleDeleteExam = async (examId: string) => {
     setLoading(true);
     try {
-      const papersToDelete = tests.filter(t => t.category === examId);
+      const papersToDelete = tests.filter(t => t.category === examId || (t.title === '_SUBJECT_SECTION_' && t.category === examId));
       await Promise.all(papersToDelete.map(t => deleteMockTest(t.id)));
       setTests(p => p.filter(t => t.category !== examId));
       toast.success(`Exam "${examId}" and its papers deleted.`);
@@ -517,10 +719,8 @@ export function ExamEditorPanel() {
   if (selectedExamId) {
     const activeExam = examsList.find(e => e.id === selectedExamId) || defaultAoExam;
     const isAoAao = activeExam.id === 'AO / AAO' || activeExam.id === 'AO/AAO';
-    const aoSections = isAoAao ? getAoAaoSections() : [];
-    const totalPapersCount = isAoAao
-      ? aoSections.reduce((acc, s) => acc + s.papers.length, 0)
-      : activeExam.freePapers.length + activeExam.paidPapers.length;
+    const examSections = getExamSubjectSections(activeExam);
+    const totalPapersCount = examSections.reduce((acc, s) => acc + s.papers.length, 0);
 
     return (
       <div className="space-y-6 animate-in fade-in duration-200">
@@ -537,7 +737,7 @@ export function ExamEditorPanel() {
               All Exams
             </Button>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-xl sm:text-2xl font-black text-slate-900 font-display">
                   {activeExam.name}
                 </h3>
@@ -549,12 +749,19 @@ export function ExamEditorPanel() {
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {activeExam.subtitle || 'Manage mock test question papers, questions, and test releases'}
+                {activeExam.subtitle || 'Manage mock test question papers, subject categories, and questions'}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <Button 
+              size="sm" 
+              className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl h-9 px-3"
+              onClick={() => openAddSubject(activeExam.name)}
+            >
+              <BookOpen className="w-3.5 h-3.5 mr-1" /> + Add Subject
+            </Button>
             <Button 
               size="sm" 
               variant="outline"
@@ -582,130 +789,88 @@ export function ExamEditorPanel() {
           </div>
         </div>
 
-        {/* Papers inside Active Exam */}
+        {/* Unified Subject Sections inside Active Exam */}
         <div className="space-y-6">
-          {isAoAao ? (
-            // ── AO / AAO 4 SECTIONS ONE BELOW OTHER ──
-            aoSections.map((sec, secIdx) => {
-              const secColors = [
-                { border: 'border-emerald-200', bg: 'bg-emerald-50/20', icon: Unlock, iconColor: 'text-emerald-600', badgeColor: 'bg-emerald-100 text-emerald-800' },
-                { border: 'border-blue-200', bg: 'bg-blue-50/20', icon: BookOpen, iconColor: 'text-blue-600', badgeColor: 'bg-blue-100 text-blue-800' },
-                { border: 'border-purple-200', bg: 'bg-purple-50/20', icon: GraduationCap, iconColor: 'text-purple-600', badgeColor: 'bg-purple-100 text-purple-800' },
-                { border: 'border-amber-200', bg: 'bg-amber-50/20', icon: Lock, iconColor: 'text-amber-600', badgeColor: 'bg-amber-100 text-amber-800' },
-                { border: 'border-slate-200', bg: 'bg-slate-50/20', icon: Layers, iconColor: 'text-slate-600', badgeColor: 'bg-slate-100 text-slate-800' }
-              ][secIdx % 5];
-              
-              const SecIcon = secColors.icon;
+          {examSections.map((sec, secIdx) => {
+            const secColors = [
+              { border: 'border-emerald-200', bg: 'bg-emerald-50/20', icon: Unlock, iconColor: 'text-emerald-600', badgeColor: 'bg-emerald-100 text-emerald-800' },
+              { border: 'border-blue-200', bg: 'bg-blue-50/20', icon: BookOpen, iconColor: 'text-blue-600', badgeColor: 'bg-blue-100 text-blue-800' },
+              { border: 'border-purple-200', bg: 'bg-purple-50/20', icon: GraduationCap, iconColor: 'text-purple-600', badgeColor: 'bg-purple-100 text-purple-800' },
+              { border: 'border-amber-200', bg: 'bg-amber-50/20', icon: Lock, iconColor: 'text-amber-600', badgeColor: 'bg-amber-100 text-amber-800' },
+              { border: 'border-slate-200', bg: 'bg-slate-50/20', icon: Layers, iconColor: 'text-slate-600', badgeColor: 'bg-slate-100 text-slate-800' }
+            ][secIdx % 5];
+            
+            const SecIcon = secColors.icon;
 
-              return (
-                <Card key={sec.id} className={`p-5 border ${secColors.border} bg-white shadow-xs rounded-2xl`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-slate-100 pb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-base font-black text-slate-900 flex items-center gap-2">
-                          <SecIcon className={`w-4 h-4 ${secColors.iconColor}`} /> {sec.title}
-                        </h4>
-                        <Badge className={`${secColors.badgeColor} border-0 text-[10px] font-bold`}>
-                          {sec.papers.length} Papers
-                        </Badge>
-                        <Badge variant="outline" className="text-[9px] text-muted-foreground font-semibold">
-                          {sec.badge}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {sec.description}
-                      </p>
+            return (
+              <Card key={sec.id} className={`p-5 border ${secColors.border} bg-white shadow-xs rounded-2xl`}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-slate-100 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-base font-black text-slate-900 flex items-center gap-2">
+                        <SecIcon className={`w-4 h-4 ${secColors.iconColor}`} /> {sec.title}
+                      </h4>
+                      <Badge className={`${secColors.badgeColor} border-0 text-[10px] font-bold`}>
+                        {sec.papers.length} Papers
+                      </Badge>
+                      <Badge variant="outline" className="text-[9px] text-muted-foreground font-semibold">
+                        {sec.badge}
+                      </Badge>
+                      {sec.isCustom && (
+                        <span className="text-[9px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded">Custom Subject</span>
+                      )}
                     </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {sec.description}
+                    </p>
+                  </div>
 
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+                    {sec.isCustom && sec.sectionTestId && (
+                      <>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 text-xs text-slate-600 hover:text-slate-900 px-2"
+                          onClick={() => openEditSubject(sec, activeExam.name)}
+                          title="Edit Subject Name & Details"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 text-xs text-destructive hover:bg-destructive/10 px-2"
+                          onClick={() => setConfirmDeleteSubject({ id: sec.sectionTestId!, name: sec.title })}
+                          title="Delete Subject"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                        </Button>
+                      </>
+                    )}
                     <Button 
                       size="sm" 
                       variant="outline"
-                      className="text-xs font-bold text-slate-700 border-slate-200 hover:bg-slate-50 rounded-xl h-8 self-start sm:self-auto shrink-0"
+                      className="text-xs font-bold text-slate-700 border-slate-200 hover:bg-slate-50 rounded-xl h-8"
                       onClick={() => openAddPaper(activeExam.name, sec.isFree, sec.isFree ? 0 : activeExam.price, sec.categoryTag)}
                     >
-                      <Plus className="w-3.5 h-3.5 mr-1" /> + Add to {sec.title.split('–')[0].trim()}
+                      <Plus className="w-3.5 h-3.5 mr-1" /> + Add Paper
                     </Button>
                   </div>
-
-                  {sec.papers.length === 0 ? (
-                    <div className="p-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/40 text-center text-xs text-muted-foreground">
-                      No papers in this section yet. Click "+ Add" above to add one.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {sec.papers.map((paper) => renderPaperRow(paper, sec.isFree))}
-                    </div>
-                  )}
-                </Card>
-              );
-            })
-          ) : (
-            // ── DYNAMIC CUSTOM EXAMS (e.g. AHO/ADH) ──
-            <>
-              {/* 1. FREE PAPERS */}
-              <Card className="p-5 border border-emerald-100 bg-white shadow-xs rounded-2xl">
-                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
-                      <Unlock className="w-4 h-4 text-emerald-600" /> Free Practice Papers ({activeExam.freePapers.length})
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Available immediately to all registered students without subscription
-                    </p>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    className="text-xs font-bold text-emerald-700 border-emerald-200 hover:bg-emerald-50 rounded-xl h-8"
-                    onClick={() => openAddPaper(activeExam.name, true, 0)}
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> New Free Paper
-                  </Button>
                 </div>
 
-                {activeExam.freePapers.length === 0 ? (
-                  <div className="p-6 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/20 text-center text-xs text-muted-foreground">
-                    No free papers added under {activeExam.name} yet. Click "+ Add Free Paper" above.
+                {sec.papers.length === 0 ? (
+                  <div className="p-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/40 text-center text-xs text-muted-foreground">
+                    No papers added under "{sec.title}" yet. Click "+ Add Paper" above.
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {activeExam.freePapers.map((paper) => renderPaperRow(paper, true))}
+                    {sec.papers.map((paper) => renderPaperRow(paper, sec.isFree))}
                   </div>
                 )}
               </Card>
-
-              {/* 2. PAID PAPERS */}
-              <Card className="p-5 border border-slate-200 bg-white shadow-xs rounded-2xl">
-                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-amber-600" /> Subscription / Paid Papers ({activeExam.paidPapers.length})
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Unlocked via {activeExam.name} subject subscription (₹{activeExam.price}) or All-Access bundle
-                    </p>
-                  </div>
-                  <Button 
-                    size="sm" 
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl h-8"
-                    onClick={() => openAddPaper(activeExam.name, false, activeExam.price)}
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" /> New Paid Paper
-                  </Button>
-                </div>
-
-                {activeExam.paidPapers.length === 0 ? (
-                  <div className="p-6 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 text-center text-xs text-muted-foreground">
-                    No paid mock papers added under {activeExam.name} yet. Click "+ Add Paid Paper" above.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {activeExam.paidPapers.map((paper) => renderPaperRow(paper, false))}
-                  </div>
-                )}
-              </Card>
-            </>
-          )}
+            );
+          })}
         </div>
 
         {/* Common Dialogs */}
@@ -1042,6 +1207,66 @@ export function ExamEditorPanel() {
           </DialogContent>
         </Dialog>
 
+        {/* CREATE / EDIT SUBJECT MODAL */}
+        <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-bold text-lg text-slate-900">
+                {editingSubject?.id ? 'Edit Subject Section' : 'Add New Subject'}
+              </DialogTitle>
+              <DialogDescription>
+                Create a subject category card (e.g. Free Papers, Important Papers, General Knowledge, Horticulture Discipline) under this exam portal.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSaveSubject} className="space-y-4 pt-2">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Subject Title</Label>
+                <Input 
+                  value={subjectForm.name} 
+                  onChange={e => setSubjectForm(p => ({ ...p, name: e.target.value }))} 
+                  required 
+                  placeholder="e.g. Horticulture Discipline – Paper II, General Studies" 
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">Description / Syllabus Scope</Label>
+                <Textarea 
+                  value={subjectForm.subtitle} 
+                  onChange={e => setSubjectForm(p => ({ ...p, subtitle: e.target.value }))} 
+                  placeholder="e.g. 100 marks full-syllabus discipline mock test series" 
+                  className="min-h-[70px] text-xs" 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Badge Tag</Label>
+                  <Input 
+                    value={subjectForm.badge} 
+                    onChange={e => setSubjectForm(p => ({ ...p, badge: e.target.value }))} 
+                    placeholder="e.g. Core Subject Mocks, High Yield" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold">Access Mode</Label>
+                  <Select 
+                    value={subjectForm.is_free ? 'free' : 'paid'} 
+                    onValueChange={v => setSubjectForm(p => ({ ...p, is_free: v === 'free' }))}
+                  >
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paid" className="text-xs font-bold text-amber-700">Paid Subject</SelectItem>
+                      <SelectItem value="free" className="text-xs font-bold text-emerald-700">Free Subject</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl">
+                {editingSubject?.id ? 'Save Subject Changes' : 'Create Subject Card'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         {/* PAPER CREATE / EDIT MODAL */}
         <Dialog open={paperDialogOpen} onOpenChange={setPaperDialogOpen}>
           <DialogContent className="max-w-lg rounded-2xl">
@@ -1075,12 +1300,37 @@ export function ExamEditorPanel() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold">Exam Category</Label>
-                  <Input 
-                    value={paperForm.category} 
-                    onChange={e => setPaperForm(p => ({ ...p, category: e.target.value }))} 
-                    required 
-                  />
+                  <Label className="text-xs font-bold">Subject / Section</Label>
+                  {selectedExamId ? (
+                    <Select
+                      value={paperForm.category}
+                      onValueChange={v => {
+                        const activeExam = examsList.find(e => e.id === selectedExamId) || defaultAoExam;
+                        const matchedSec = getExamSubjectSections(activeExam).find(s => s.categoryTag === v || s.title === v);
+                        setPaperForm(p => ({
+                          ...p,
+                          category: v,
+                          is_free: matchedSec ? matchedSec.isFree : p.is_free,
+                          price: (matchedSec && matchedSec.isFree) ? '0' : p.price
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Select Subject" /></SelectTrigger>
+                      <SelectContent>
+                        {getExamSubjectSections(examsList.find(e => e.id === selectedExamId) || defaultAoExam).map(s => (
+                          <SelectItem key={s.id} value={s.categoryTag} className="text-xs">
+                            {s.title} {s.isFree ? '(Free)' : '(Paid)'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input 
+                      value={paperForm.category} 
+                      onChange={e => setPaperForm(p => ({ ...p, category: e.target.value }))} 
+                      required 
+                    />
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Access Type</Label>
@@ -1116,6 +1366,31 @@ export function ExamEditorPanel() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* DELETE SUBJECT CONFIRM */}
+        <AlertDialog open={!!confirmDeleteSubject} onOpenChange={o => !o && setConfirmDeleteSubject(null)}>
+          <AlertDialogContent className="rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Subject "{confirmDeleteSubject?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will delete this subject section. Any papers assigned to it will remain in the exam and can be reassigned.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
+                onClick={() => {
+                  if (confirmDeleteSubject) {
+                    handleDeleteSubject(confirmDeleteSubject.id, confirmDeleteSubject.name);
+                  }
+                }}
+              >
+                Delete Subject
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* QUESTION DIALOG & BULK UPLOAD */}
         {questionDialogOpen && activeTestForQuestion && (
