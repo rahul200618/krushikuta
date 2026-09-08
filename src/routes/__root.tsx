@@ -17,6 +17,12 @@ import { Toaster } from "sonner";
 import { ServicesPopup } from "@/components/site/ServicesPopup";
 import faviconUrl from "../assets/favicon-v2.png?url";
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', () => {
+    window.location.reload();
+  });
+}
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -29,7 +35,7 @@ function NotFoundComponent() {
         <div className="mt-6">
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md gradient-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow-soft hover:opacity-90"
+            className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow-soft hover:bg-emerald-700 cursor-pointer"
           >
             Go home
           </Link>
@@ -40,21 +46,37 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+  console.error('[RootError]', error);
   const router = useRouter();
+  const isChunkError = 
+    error?.message?.includes('Failed to fetch dynamically imported module') || 
+    error?.message?.includes('Importing a module script failed') ||
+    error?.message?.includes('dynamically imported');
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold text-foreground">This page didn't load</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Something went wrong. Try again.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {isChunkError
+            ? "A newer version of the website was updated. Please refresh to load the latest changes."
+            : "Something went wrong. Try again."}
+        </p>
         <div className="mt-6 flex justify-center gap-2">
           <button
-            onClick={() => { router.invalidate(); reset(); }}
-            className="rounded-md gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+            onClick={() => { 
+              if (isChunkError) {
+                window.location.reload();
+              } else {
+                router.invalidate(); 
+                reset(); 
+              }
+            }}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 cursor-pointer"
           >
-            Try again
+            {isChunkError ? "Refresh Page" : "Try again"}
           </button>
-          <a href="/" className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent">
+          <a href="/" className="rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent cursor-pointer">
             Go home
           </a>
         </div>

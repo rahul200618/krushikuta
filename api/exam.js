@@ -9,19 +9,21 @@ function logToFile(msg) {
   } catch (err) {}
 }
 
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '').trim().replace(/[\r\n\t]/g, '');
+const supabaseUrl = (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').trim().replace(/[\r\n\t]/g, '');
+const anonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim().replace(/[\r\n\t]/g, '');
+
 if (!serviceKey) {
   console.warn('[exam-api] WARNING: SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_SERVICE_ROLE_KEY) is not defined in environment variables. Falling back to ANON_KEY. Admin features and RLS bypass will fail.');
 }
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
-  serviceKey || process.env.VITE_SUPABASE_ANON_KEY || ''
+  supabaseUrl,
+  serviceKey || anonKey
 );
 
 function isPlaceholderConfig() {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-  return !url || url.includes('placeholder-project') || url.includes('placeholder');
+  return !supabaseUrl || supabaseUrl.includes('placeholder-project') || supabaseUrl.includes('placeholder');
 }
 
 function handleMockAction(action, payload) {
