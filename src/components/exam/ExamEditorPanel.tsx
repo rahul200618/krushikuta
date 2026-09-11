@@ -124,12 +124,13 @@ export function ExamEditorPanel() {
   });
 
   const [confirmDeleteExam, setConfirmDeleteExam] = useState<string | null>(null);
-  const [confirmDeleteSubject, setConfirmDeleteSubject] = useState<{ id: number; name: string } | null>(null);
+  const [confirmDeleteSubject, setConfirmDeleteSubject] = useState<{ id: number | string; name: string; categoryTag?: string; sectionTestId?: number } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'test' | 'question'; id: number } | null>(null);
 
   // Link / Share Papers modal state
   const [linkPapersDialogOpen, setLinkPapersDialogOpen] = useState(false);
   const [linkTargetExam, setLinkTargetExam] = useState<string>('');
+  const [linkTargetSectionTitle, setLinkTargetSectionTitle] = useState<string>('');
   const [linkTargetSubjectTag, setLinkTargetSubjectTag] = useState<string>('');
   const [selectedTestIdsToLink, setSelectedTestIdsToLink] = useState<number[]>([]);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
@@ -190,6 +191,11 @@ export function ExamEditorPanel() {
     'practical exam'
   ];
 
+  const normalizeExamName = (str?: string) => {
+    if (!str) return '';
+    return str.toLowerCase().replace(/[\s\-_/\\|]+/g, '').trim();
+  };
+
   const isAoAaoPaper = (cat?: string) => {
     if (!cat) return true;
     const clean = cat.toLowerCase().trim();
@@ -199,9 +205,16 @@ export function ExamEditorPanel() {
   const getLinkedExams = (test: MockTest): string[] => {
     let linked: string[] = [];
     try {
-      if (test.popup_message && test.popup_message.startsWith('{')) {
-        const parsed = JSON.parse(test.popup_message);
-        if (Array.isArray(parsed.linked_exams)) {
+      const raw = (test as any).popup_message;
+      if (raw) {
+        let parsed = raw;
+        if (typeof raw === 'string') {
+          const trimmed = raw.trim();
+          if (trimmed.startsWith('{')) {
+            parsed = JSON.parse(trimmed);
+          }
+        }
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.linked_exams)) {
           linked = parsed.linked_exams;
         }
       }
@@ -211,22 +224,41 @@ export function ExamEditorPanel() {
 
   const isPaperInExam = (test: MockTest, examId: string, examName: string): boolean => {
     const linked = getLinkedExams(test);
-    const cleanExamId = examId.toLowerCase().trim();
-    const cleanExamName = examName.toLowerCase().trim();
+    const normExamId = normalizeExamName(examId);
+    const normExamName = normalizeExamName(examName);
+    const isTargetAo = normExamId === 'aoaao' || (normExamId.startsWith('ao') && !normExamId.includes('aho'));
 
+    // 1. Check multi-exam linked tags
     if (linked.some(l => {
-      const cleanL = l.toLowerCase().trim();
-      return cleanL === cleanExamId || cleanL === cleanExamName || (cleanExamId.includes('ao') && cleanL.includes('ao'));
+      const normL = normalizeExamName(l);
+      if (!normL) return false;
+      return (
+        normL === normExamId ||
+        normL === normExamName ||
+        normExamId.includes(normL) ||
+        normL.includes(normExamId) ||
+        (isTargetAo && (normL === 'aoaao' || (normL.startsWith('ao') && !normL.includes('aho'))))
+      );
     })) {
       return true;
     }
 
-    const cat = (test.category || '').toLowerCase().trim();
-    if (cleanExamId.includes('ao') && (isAoAaoPaper(cat) || cat === 'ao/aao' || cat === 'ao / aao')) {
+    // 2. Check native category
+    const rawCat = (test.category || '').trim();
+    const normCat = normalizeExamName(rawCat);
+
+    if (isTargetAo && (isAoAaoPaper(rawCat) || normCat === 'aoaao' || (normCat.startsWith('ao') && !normCat.includes('aho')))) {
       return true;
     }
 
-    if (cat === cleanExamId || cat === cleanExamName || cat.startsWith(`${cleanExamName}::`) || cat.startsWith(`${cleanExamId}::`)) {
+    if (
+      normCat === normExamId ||
+      normCat === normExamName ||
+      normCat.startsWith(normExamId) ||
+      normCat.startsWith(normExamName) ||
+      rawCat.toLowerCase().startsWith(`${examName.toLowerCase()}::`) ||
+      rawCat.toLowerCase().startsWith(`${examId.toLowerCase()}::`)
+    ) {
       return true;
     }
 
@@ -268,6 +300,22 @@ export function ExamEditorPanel() {
     }
   });
 
+  const isPaperFree = (test: MockTest) => {
+    if (!test) return false;
+    if (test.is_free === true) return true;
+    const title = (test.title || '').toLowerCase().trim();
+    const cat = (test.category || '').toLowerCase().trim();
+    if (
+      title.includes('paper -i (general knowledge)') ||
+      title.includes('paper-ii (bsc agri graduates)') ||
+      (cat === 'general paper' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0')) ||
+      (cat === 'core papers' && !title.includes('01') && !title.includes('02') && !title.includes('–') && !title.includes('- 0'))
+    ) {
+      return true;
+    }
+    return false;
+  };
+
   const examsList = [defaultAoExam, ...Object.values(customExams)];
 
   // 3. Distribute all real mock test papers (including multi-exam linked papers)
@@ -276,7 +324,7 @@ export function ExamEditorPanel() {
 
     examsList.forEach(targetExam => {
       if (isPaperInExam(test, targetExam.id, targetExam.name)) {
-        const isFree = test.is_free || (test.price === 0 && (test.category === 'General Paper' || test.category === 'core papers' || test.is_free));
+        const isFree = isPaperFree(test);
         if (isFree) {
           if (!targetExam.freePapers.some(p => p.id === test.id)) {
             targetExam.freePapers.push(test);
@@ -308,13 +356,72 @@ export function ExamEditorPanel() {
     sectionTestId?: number;
   }
 
+  // ── LINK / SHARE PAPERS SYSTEM & SECTION MATCHING ───────────
+  const isPaperInExamSection = (test: MockTest, examName: string, sectionTitle: string, sectionTag?: string): boolean => {
+    const linked = getLinkedExams(test);
+    const normExamName = normalizeExamName(examName);
+    const normSectionTitle = normalizeExamName(sectionTitle);
+    const normTag = sectionTag ? normalizeExamName(sectionTag) : '';
+    const normExamSection = normalizeExamName(`${examName}::${sectionTitle}`);
+
+    // 1. Is it linked explicitly to this section?
+    const hasSectionLink = linked.some(l => {
+      const normL = normalizeExamName(l);
+      if (!normL) return false;
+      return (
+        normL === normExamSection ||
+        (normTag && normL === normTag) ||
+        normL === `${normExamName}${normSectionTitle}` ||
+        (normL.includes(normExamName) && normL.includes(normSectionTitle))
+      );
+    });
+
+    if (hasSectionLink) return true;
+
+    // 2. Is it in this exam with matching native category?
+    const rawCat = (test.category || '').trim();
+    const normCat = normalizeExamName(rawCat);
+
+    if (
+      normCat === normExamSection ||
+      (normTag && normCat === normTag) ||
+      normCat === `${normExamName}${normSectionTitle}`
+    ) {
+      return true;
+    }
+
+    // 3. Free Practice Papers section
+    if (normSectionTitle.includes('freepractice') || normSectionTitle === 'free') {
+      if (isPaperFree(test) && isPaperInExam(test, examName, examName)) {
+        return true;
+      }
+    }
+
+    // 4. Inferred matching if explicitly named AND is native to this exam
+    const hasOtherSectionLinkInThisExam = linked.some(l => {
+      const normL = normalizeExamName(l);
+      return normL.includes(normExamName) && normL.length > normExamName.length;
+    });
+
+    if (
+      !hasOtherSectionLinkInThisExam &&
+      isPaperInExam(test, examName, examName) && 
+      (normCat === normSectionTitle || (normCat.length > 0 && normCat.includes(normSectionTitle)))
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
   const getExamSubjectSections = (exam: ExamGroup): SubjectSection[] => {
     const isAoAao = exam.id === 'AO / AAO' || exam.id === 'AO/AAO';
     const allExamPapers = [...exam.freePapers, ...exam.paidPapers];
 
     // Find custom subject section rows created for this exam (_SUBJECT_SECTION_)
     const customSubjectRows = tests.filter(
-      t => t.title === '_SUBJECT_SECTION_' && t.category?.toLowerCase().trim() === exam.name.toLowerCase().trim()
+      t => t.title === '_SUBJECT_SECTION_' && 
+      (t.category?.toLowerCase().trim() === exam.name.toLowerCase().trim() || normalizeExamName(t.category) === normalizeExamName(exam.name))
     );
 
     const customSubjects: SubjectSection[] = customSubjectRows.map(row => {
@@ -325,74 +432,111 @@ export function ExamEditorPanel() {
         }
       } catch (e) { /* ignore */ }
 
-      const title = meta.name || row.category || 'Subject Section';
+      const title = meta.name || row.category || 'Section';
       return {
         id: `custom_${row.id}`,
         title: title,
         categoryTag: `${exam.name}::${title}`,
         badge: meta.badge || (row.is_free ? 'Free Access' : 'Core Subject Mocks'),
         isFree: !!row.is_free,
-        description: meta.subtitle || 'Custom subject mock test series',
+        description: meta.subtitle || 'Custom mock test series',
         papers: [],
         isCustom: true,
         sectionTestId: row.id
       };
     });
 
-    let sections: SubjectSection[] = [];
+    const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 
+    // 1. Free Practice Papers Section (always at top)
+    const freeSection: SubjectSection = {
+      id: 'free',
+      title: 'Free Practice Papers',
+      categoryTag: isAoAao ? 'General Paper' : `${exam.name}::Free Practice Papers`,
+      badge: 'Free Access',
+      isFree: true,
+      description: 'Available immediately to all registered students without subscription',
+      papers: allExamPapers.filter(t => isPaperFree(t)).sort(sortFn),
+      isCustom: false
+    };
+
+    const paidPapers = allExamPapers.filter(t => !isPaperFree(t));
+
+    // If custom sections exist in database:
+    if (customSubjects.length > 0) {
+      const remainingPaid: MockTest[] = [];
+
+      paidPapers.forEach(paper => {
+        let matched = false;
+        customSubjects.forEach(s => {
+          if (isPaperInExamSection(paper, exam.name, s.title, s.categoryTag)) {
+            s.papers.push(paper);
+            matched = true;
+          }
+        });
+        if (!matched) {
+          remainingPaid.push(paper);
+        }
+      });
+
+      customSubjects.forEach(s => s.papers.sort(sortFn));
+
+      const additionalSections: SubjectSection[] = [];
+      if (remainingPaid.length > 0) {
+        additionalSections.push({
+          id: 'other',
+          title: 'Additional Mock Papers',
+          categoryTag: isAoAao ? 'AO/AAO' : exam.name,
+          badge: 'Additional Sets',
+          isFree: false,
+          description: `Other mock papers and practice tests under ${exam.name}`,
+          papers: remainingPaid.sort(sortFn),
+          isCustom: false
+        });
+      }
+
+      return [freeSection, ...customSubjects, ...additionalSections];
+    }
+
+    // If NO custom sections created yet:
     if (isAoAao) {
-      // 1. Free Practice Papers
-      const freePapers = allExamPapers.filter(t => t.is_free || (t.category === 'General Paper' || t.category === 'core papers'));
-      // 2. Important Papers
-      const importantPapers = allExamPapers.filter(t => !freePapers.includes(t) && t.category?.toLowerCase().includes('important'));
-      // 3. BSc Agri(85%)–Paper II
-      const bscAgriPapers = allExamPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii')));
-      // 4. General Knowledge–Paper I
-      const gkPapers = allExamPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk')));
-      // 5. Remaining papers
-      const otherPapers = allExamPapers.filter(t => !freePapers.includes(t) && !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
+      const importantPapers = paidPapers.filter(t => t.category?.toLowerCase().includes('important'));
+      const bscAgriPapers = paidPapers.filter(t => !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii') || t.title.toLowerCase().includes('bsc agri')));
+      const gkPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk') || t.title.toLowerCase().includes('general knowledge') || t.title.toLowerCase().includes('gk')));
+      const otherPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
 
-      const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
-
-      sections = [
-        {
-          id: 'free',
-          title: 'Free Practice Papers',
-          categoryTag: 'General Paper',
-          badge: 'Free Access',
-          isFree: true,
-          description: 'Available immediately to all registered students without subscription',
-          papers: freePapers.sort(sortFn)
-        },
-        {
+      return [
+        freeSection,
+        ...(importantPapers.length > 0 ? [{
           id: 'important',
           title: 'Important Papers',
           categoryTag: 'IMPORTANT PAPERS',
           badge: 'High Yield Series',
           isFree: false,
           description: 'Comprehensive high-priority question sets for General Knowledge and BSc Agri',
-          papers: importantPapers.sort(sortFn)
-        },
-        {
+          papers: importantPapers.sort(sortFn),
+          isCustom: false
+        }] : []),
+        ...(bscAgriPapers.length > 0 ? [{
           id: 'bsc_agri',
           title: 'BSc Agri(85%) – Paper II',
           categoryTag: 'BSc Agri(85%)-Paper II',
           badge: 'Core Subject Mocks',
           isFree: false,
           description: '100 marks full-syllabus Agriculture discipline mock test series',
-          papers: bscAgriPapers.sort(sortFn)
-        },
-        {
+          papers: bscAgriPapers.sort(sortFn),
+          isCustom: false
+        }] : []),
+        ...(gkPapers.length > 0 ? [{
           id: 'gk',
           title: 'General Knowledge – Paper I',
           categoryTag: 'General Knowledge-Paper I',
           badge: 'General Paper Mocks',
           isFree: false,
           description: 'Karnataka state general studies, current affairs, and mental ability series',
-          papers: gkPapers.sort(sortFn)
-        },
-        ...customSubjects,
+          papers: gkPapers.sort(sortFn),
+          isCustom: false
+        }] : []),
         ...(otherPapers.length > 0 ? [{
           id: 'other',
           title: 'Additional Mock Papers',
@@ -400,67 +544,15 @@ export function ExamEditorPanel() {
           badge: 'Additional Sets',
           isFree: false,
           description: 'Other mock papers and practice tests under AO / AAO',
-          papers: otherPapers.sort(sortFn)
+          papers: otherPapers.sort(sortFn),
+          isCustom: false
         }] : [])
       ];
     } else {
-      // Dynamic Exams (e.g. AHO/ADH)
-      if (customSubjects.length > 0) {
-        // Distribute papers across free and custom subjects
-        const freeSection: SubjectSection = {
-          id: 'free',
-          title: 'Free Practice Papers',
-          categoryTag: `${exam.name}::Free Practice Papers`,
-          badge: 'Free Access',
-          isFree: true,
-          description: 'Available immediately to all registered students without subscription',
-          papers: []
-        };
-
-        const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
-
-        allExamPapers.forEach(paper => {
-          if (paper.is_free || paper.price === 0) {
-            freeSection.papers.push(paper);
-            return;
-          }
-          const pTitle = paper.title.toLowerCase();
-          const pCat = (paper.category || '').toLowerCase();
-
-          const matchedCustom = customSubjects.find(
-            s => pCat === s.title.toLowerCase().trim() ||
-                 pCat === s.categoryTag.toLowerCase().trim() ||
-                 pCat.includes(s.title.toLowerCase()) ||
-                 pTitle.includes(s.title.toLowerCase()) ||
-                 (s.title.toLowerCase().includes('general knowledge') && (pTitle.includes('general knowledge') || pTitle.includes('gk') || pCat.includes('general knowledge') || pCat.includes('gk'))) ||
-                 (s.title.toLowerCase().includes('important') && (pTitle.includes('important') || pCat.includes('important'))) ||
-                 (s.title.toLowerCase().includes('paper i') && (pTitle.includes('paper i') || pCat.includes('paper i'))) ||
-                 (s.title.toLowerCase().includes('paper ii') && (pTitle.includes('paper ii') || pCat.includes('paper ii')))
-          );
-          if (matchedCustom) {
-            matchedCustom.papers.push(paper);
-          } else {
-            customSubjects[0].papers.push(paper);
-          }
-        });
-
-        freeSection.papers.sort(sortFn);
-        customSubjects.forEach(s => s.papers.sort(sortFn));
-
-        sections = [freeSection, ...customSubjects];
-      } else {
-        // Default 2 sections when no custom subjects are added yet
-        const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
-        sections = [
-          {
-            id: 'free',
-            title: 'Free Practice Papers',
-            categoryTag: `${exam.name}::Free Practice Papers`,
-            badge: 'Free Access',
-            isFree: true,
-            description: 'Available immediately to all registered students without subscription',
-            papers: exam.freePapers.sort(sortFn)
-          },
+      // Dynamic exam with no custom sections yet
+      if (paidPapers.length > 0) {
+        return [
+          freeSection,
           {
             id: 'paid',
             title: 'Subscription / Paid Papers',
@@ -468,16 +560,16 @@ export function ExamEditorPanel() {
             badge: 'Package Series',
             isFree: false,
             description: `Unlocked via ${exam.name} subject subscription (₹${exam.price}) or All-Access bundle`,
-            papers: exam.paidPapers.sort(sortFn)
+            papers: paidPapers.sort(sortFn),
+            isCustom: false
           }
         ];
       }
+      return [freeSection];
     }
-
-    return sections;
   };
 
-  // Handlers for Subject Creation & Editing
+  // ── MODALS & HANDLERS ────────────────────────────────────
   const openAddSubject = (examName: string) => {
     setEditingSubject(null);
     setSubjectForm({
@@ -490,13 +582,15 @@ export function ExamEditorPanel() {
   };
 
   const openEditSubject = (subject: SubjectSection, examName: string) => {
+    const rawId = subject.sectionTestId || (typeof subject.id === 'string' && subject.id.startsWith('custom_') ? Number(subject.id.replace('custom_', '')) : (typeof subject.id === 'number' ? subject.id : undefined));
     setEditingSubject({
-      id: subject.sectionTestId,
+      id: typeof rawId === 'number' ? rawId : undefined,
       name: subject.title,
       subtitle: subject.description,
       badge: subject.badge,
       isFree: subject.isFree,
-      examName: examName
+      examName: examName,
+      categoryTag: subject.categoryTag
     });
     setSubjectForm({
       name: subject.title,
@@ -511,7 +605,7 @@ export function ExamEditorPanel() {
     e.preventDefault();
     const name = subjectForm.name.trim();
     if (!name) {
-      toast.error('Subject title is required');
+      toast.error('Section title is required');
       return;
     }
     const activeExam = examsList.find(e => e.id === selectedExamId) || defaultAoExam;
@@ -525,8 +619,9 @@ export function ExamEditorPanel() {
 
     setLoading(true);
     try {
+      const isExistingDbRow = typeof editingSubject?.id === 'number';
       const payload = {
-        ...(editingSubject?.id ? { id: editingSubject.id } : {}),
+        ...(isExistingDbRow ? { id: editingSubject.id } : {}),
         title: '_SUBJECT_SECTION_',
         category: examName,
         description: JSON.stringify(descObj),
@@ -535,30 +630,87 @@ export function ExamEditorPanel() {
         is_active: true
       };
       const res = await saveMockTest(payload);
-      if (editingSubject?.id) {
+
+      // If editing an existing section and name changed, migrate papers under it
+      if (editingSubject?.categoryTag && editingSubject.name !== name) {
+        const oldTag = editingSubject.categoryTag.toLowerCase().trim();
+        const papersToMigrate = tests.filter(t => 
+          t.title !== '_SUBJECT_SECTION_' &&
+          t.title !== '_SUBJECT_PLACEHOLDER_' && (
+            t.category?.toLowerCase().trim() === oldTag || 
+            t.category?.toLowerCase().trim() === `${examName}::${editingSubject.name}`.toLowerCase().trim()
+          )
+        );
+        if (papersToMigrate.length > 0) {
+          const migrated = await Promise.all(papersToMigrate.map(p => saveMockTest({ ...p, category: `${examName}::${name}` })));
+          setTests(p => p.map(t => {
+            const up = migrated.find(m => m.test.id === t.id);
+            return up ? up.test : t;
+          }));
+        }
+      }
+
+      if (isExistingDbRow) {
         setTests(p => p.map(t => t.id === res.test.id ? res.test : t));
-        toast.success(`Subject "${name}" updated successfully!`);
+        toast.success(`Section "${name}" updated successfully!`);
       } else {
         setTests(p => [res.test, ...p]);
-        toast.success(`Subject "${name}" added to ${examName}!`);
+        toast.success(`Section "${name}" created in ${examName}!`);
       }
       setSubjectDialogOpen(false);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to save subject');
+      toast.error(err.message || 'Failed to save section');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteSubject = async (sectionTestId: number, subjectName: string) => {
+  const handleDeleteSubject = async (sectionId: number | string, subjectName: string, categoryTag?: string, sectionTestId?: number) => {
     setLoading(true);
     try {
-      await deleteMockTest(sectionTestId);
-      setTests(p => p.filter(t => t.id !== sectionTestId));
-      toast.success(`Subject "${subjectName}" deleted.`);
+      let dbId: number | null = null;
+      if (typeof sectionTestId === 'number') {
+        dbId = sectionTestId;
+      } else if (typeof sectionId === 'number') {
+        dbId = sectionId;
+      } else if (typeof sectionId === 'string' && sectionId.startsWith('custom_')) {
+        const parsed = Number(sectionId.replace('custom_', ''));
+        if (!isNaN(parsed)) dbId = parsed;
+      }
+
+      if (dbId) {
+        await deleteMockTest(dbId);
+        setTests(p => p.filter(t => t.id !== dbId));
+      }
+
+      // Reassign any papers tagged with this section category to the base exam
+      const activeExam = examsList.find(e => e.id === selectedExamId) || defaultAoExam;
+      const examName = activeExam.name;
+
+      if (categoryTag || subjectName) {
+        const matchingPapers = tests.filter(t => 
+          t.title !== '_SUBJECT_SECTION_' &&
+          t.title !== '_SUBJECT_PLACEHOLDER_' && (
+            (categoryTag && t.category?.toLowerCase().trim() === categoryTag.toLowerCase().trim()) ||
+            (subjectName && t.category?.toLowerCase().trim() === `${examName}::${subjectName}`.toLowerCase().trim())
+          )
+        );
+
+        if (matchingPapers.length > 0) {
+          const updated = await Promise.all(
+            matchingPapers.map(p => saveMockTest({ ...p, category: examName }))
+          );
+          setTests(p => p.map(t => {
+            const found = updated.find(u => u.test.id === t.id);
+            return found ? found.test : t;
+          }));
+        }
+      }
+
+      toast.success(`Section "${subjectName}" deleted.`);
       setConfirmDeleteSubject(null);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to delete subject');
+      toast.error(err.message || 'Failed to delete section');
     } finally {
       setLoading(false);
     }
@@ -666,17 +818,39 @@ export function ExamEditorPanel() {
     }
   };
 
-  // Handlers for Link / Share Papers Across Exams
-  const openLinkPapersModal = (targetExamName: string, targetSubjectTag?: string) => {
+  // ── LINK / SHARE PAPERS SYSTEM ───────────────────────────
+  const openLinkPapersModal = (targetExamName: string, targetSectionTitle?: string, targetSubjectTag?: string) => {
     setLinkTargetExam(targetExamName);
+    setLinkTargetSectionTitle(targetSectionTitle || '');
     setLinkTargetSubjectTag(targetSubjectTag || '');
-    // Pre-select any papers that are already in this exam
-    const alreadyInExam = tests.filter(t => 
-      t.title !== '_SUBJECT_PLACEHOLDER_' && 
-      t.title !== '_SUBJECT_SECTION_' && 
-      isPaperInExam(t, targetExamName, targetExamName)
-    ).map(t => t.id);
-    setSelectedTestIdsToLink(alreadyInExam);
+
+    let preselected: number[] = [];
+    if (targetSectionTitle) {
+      const activeExam = examsList.find(e => normalizeExamName(e.name) === normalizeExamName(targetExamName)) || defaultAoExam;
+      const sections = getExamSubjectSections(activeExam);
+      const activeSection = sections.find(s => 
+        normalizeExamName(s.title) === normalizeExamName(targetSectionTitle) ||
+        (targetSubjectTag && normalizeExamName(s.categoryTag) === normalizeExamName(targetSubjectTag))
+      );
+
+      if (activeSection) {
+        preselected = activeSection.papers.map(p => p.id);
+      } else {
+        preselected = tests.filter(t => 
+          t.title !== '_SUBJECT_PLACEHOLDER_' && 
+          t.title !== '_SUBJECT_SECTION_' && 
+          isPaperInExamSection(t, targetExamName, targetSectionTitle, targetSubjectTag)
+        ).map(t => t.id);
+      }
+    } else {
+      preselected = tests.filter(t => 
+        t.title !== '_SUBJECT_PLACEHOLDER_' && 
+        t.title !== '_SUBJECT_SECTION_' && 
+        isPaperInExam(t, targetExamName, targetExamName)
+      ).map(t => t.id);
+    }
+
+    setSelectedTestIdsToLink(preselected);
     setLinkSearchQuery('');
     setLinkFilterSourceExam('all');
     setLinkPapersDialogOpen(true);
@@ -688,8 +862,16 @@ export function ExamEditorPanel() {
     try {
       const allRealPapers = tests.filter(t => t.title !== '_SUBJECT_PLACEHOLDER_' && t.title !== '_SUBJECT_SECTION_');
       
+      const targetSectionKey = linkTargetSectionTitle ? `${linkTargetExam}::${linkTargetSectionTitle}` : linkTargetExam;
+      const isFreeSection = linkTargetSectionTitle && (
+        normalizeExamName(linkTargetSectionTitle).includes('free') || 
+        (linkTargetSubjectTag && normalizeExamName(linkTargetSubjectTag).includes('free'))
+      );
+
       const papersToUpdate = allRealPapers.filter(t => {
-        const wasIn = isPaperInExam(t, linkTargetExam, linkTargetExam);
+        const wasIn = linkTargetSectionTitle 
+          ? isPaperInExamSection(t, linkTargetExam, linkTargetSectionTitle, linkTargetSubjectTag)
+          : isPaperInExam(t, linkTargetExam, linkTargetExam);
         const shouldBeIn = selectedTestIdsToLink.includes(t.id);
         return wasIn !== shouldBeIn;
       });
@@ -715,16 +897,45 @@ export function ExamEditorPanel() {
         }
 
         const shouldBeIn = selectedTestIdsToLink.includes(test.id);
+        const normTargetKey = normalizeExamName(targetSectionKey);
+        const normTargetExam = normalizeExamName(linkTargetExam);
+
         if (shouldBeIn) {
-          if (!currentLinked.some(e => e.toLowerCase() === linkTargetExam.toLowerCase())) {
+          if (linkTargetSectionTitle) {
+            if (!currentLinked.some(e => normalizeExamName(e) === normTargetKey)) {
+              currentLinked.push(targetSectionKey);
+            }
+          }
+          if (!currentLinked.some(e => normalizeExamName(e) === normTargetExam)) {
             currentLinked.push(linkTargetExam);
           }
         } else {
-          currentLinked = currentLinked.filter(e => e.toLowerCase() !== linkTargetExam.toLowerCase());
+          if (linkTargetSectionTitle) {
+            currentLinked = currentLinked.filter(e => {
+              const normE = normalizeExamName(e);
+              return (
+                normE !== normTargetKey && 
+                normE !== `${normTargetExam}${normalizeExamName(linkTargetSectionTitle)}` &&
+                (linkTargetSubjectTag ? normE !== normalizeExamName(linkTargetSubjectTag) : true)
+              );
+            });
+            const stillHasSectionInExam = currentLinked.some(e => {
+              const normE = normalizeExamName(e);
+              return normE.startsWith(normTargetExam) && normE !== normTargetExam;
+            });
+            if (!stillHasSectionInExam && (test.category || '').toLowerCase() !== linkTargetExam.toLowerCase()) {
+              currentLinked = currentLinked.filter(e => normalizeExamName(e) !== normTargetExam);
+            }
+          } else {
+            currentLinked = currentLinked.filter(e => !normalizeExamName(e).startsWith(normTargetExam));
+          }
         }
+
+        const updatedIsFree = isFreeSection && shouldBeIn ? true : test.is_free;
 
         const payload = {
           ...test,
+          is_free: updatedIsFree,
           popup_message: JSON.stringify({
             ...sched,
             linked_exams: currentLinked
@@ -739,7 +950,8 @@ export function ExamEditorPanel() {
         return up ? up : t;
       }));
 
-      toast.success(`Successfully updated linked papers for ${linkTargetExam}!`);
+      const destName = linkTargetSectionTitle ? `"${linkTargetSectionTitle}" in ${linkTargetExam}` : linkTargetExam;
+      toast.success(`Successfully updated linked papers for ${destName}!`);
       setLinkPapersDialogOpen(false);
     } catch (err: any) {
       toast.error(err.message || 'Failed to update linked papers');
@@ -911,15 +1123,15 @@ export function ExamEditorPanel() {
           <div className="flex items-center gap-2 flex-wrap">
             <Button 
               size="sm" 
-              className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl h-9 px-3"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl h-9 px-3.5 shadow-xs flex items-center gap-1.5 cursor-pointer"
               onClick={() => openAddSubject(activeExam.name)}
             >
-              <BookOpen className="w-3.5 h-3.5 mr-1" /> + Add Subject
+              <Plus className="w-4 h-4" /> + Add Section
             </Button>
             <Button 
               size="sm" 
               variant="outline"
-              className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold rounded-xl h-9 px-3"
+              className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs font-bold rounded-xl h-9 px-3 cursor-pointer"
               onClick={() => openLinkPapersModal(activeExam.name)}
             >
               <Share2 className="w-3.5 h-3.5 mr-1" /> 🔗 Link Papers
@@ -927,14 +1139,14 @@ export function ExamEditorPanel() {
             <Button 
               size="sm" 
               variant="outline"
-              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-xs font-bold rounded-xl h-9 px-3"
+              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-xs font-bold rounded-xl h-9 px-3 cursor-pointer"
               onClick={() => openAddPaper(activeExam.name, true, 0, isAoAao ? 'General Paper' : undefined)}
             >
               <Unlock className="w-3.5 h-3.5 mr-1" /> + Add Free Paper
             </Button>
             <Button 
               size="sm" 
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl h-9 px-3"
+              className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl h-9 px-3 cursor-pointer"
               onClick={() => openAddPaper(activeExam.name, false, activeExam.price, isAoAao ? 'IMPORTANT PAPERS' : undefined)}
             >
               <Lock className="w-3.5 h-3.5 mr-1" /> + Add Paid Paper
@@ -942,7 +1154,7 @@ export function ExamEditorPanel() {
             <Button 
               variant="outline" 
               size="icon" 
-              className="w-9 h-9 text-slate-600 rounded-xl"
+              className="w-9 h-9 text-slate-600 rounded-xl cursor-pointer"
               onClick={() => openEditExam(activeExam)}
               title="Edit Exam Details"
             >
@@ -979,7 +1191,7 @@ export function ExamEditorPanel() {
                         {sec.badge}
                       </Badge>
                       {sec.isCustom && (
-                        <span className="text-[9px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded">Custom Subject</span>
+                        <span className="text-[9px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded">Custom Section</span>
                       )}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -988,41 +1200,46 @@ export function ExamEditorPanel() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
-                    {sec.isCustom && sec.sectionTestId && (
+                    {sec.id !== 'free' && (
                       <>
                         <Button 
                           size="sm" 
-                          variant="ghost" 
-                          className="h-8 text-xs text-slate-600 hover:text-slate-900 px-2"
+                          variant="outline" 
+                          className="h-8 text-xs text-slate-700 hover:text-emerald-700 border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 px-2.5 rounded-xl font-bold gap-1 cursor-pointer"
                           onClick={() => openEditSubject(sec, activeExam.name)}
-                          title="Edit Subject Name & Details"
+                          title="Edit Section Name & Details"
                         >
-                          <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit
+                          <Edit3 className="w-3.5 h-3.5" /> Edit Section
                         </Button>
                         <Button 
                           size="sm" 
-                          variant="ghost" 
-                          className="h-8 text-xs text-destructive hover:bg-destructive/10 px-2"
-                          onClick={() => setConfirmDeleteSubject({ id: sec.sectionTestId!, name: sec.title })}
-                          title="Delete Subject"
+                          variant="outline" 
+                          className="h-8 text-xs text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 hover:bg-red-50/50 px-2.5 rounded-xl font-bold gap-1 cursor-pointer"
+                          onClick={() => setConfirmDeleteSubject({ 
+                            id: sec.sectionTestId || sec.id, 
+                            sectionTestId: sec.sectionTestId,
+                            name: sec.title, 
+                            categoryTag: sec.categoryTag 
+                          })}
+                          title="Delete Section"
                         >
-                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                          <Trash2 className="w-3.5 h-3.5" /> Delete Section
                         </Button>
                       </>
                     )}
                     <Button 
                       size="sm" 
                       variant="ghost"
-                      className="text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-xl h-8 px-2"
-                      onClick={() => openLinkPapersModal(activeExam.name, sec.categoryTag)}
-                      title="Link papers from other exams into this exam"
+                      className="text-xs font-bold text-indigo-700 hover:bg-indigo-50 rounded-xl h-8 px-2 cursor-pointer"
+                      onClick={() => openLinkPapersModal(activeExam.name, sec.title, sec.categoryTag)}
+                      title={`Link papers specifically into ${sec.title}`}
                     >
                       <Link2 className="w-3.5 h-3.5 mr-1" /> Link Papers
                     </Button>
                     <Button 
                       size="sm" 
                       variant="outline"
-                      className="text-xs font-bold text-slate-700 border-slate-200 hover:bg-slate-50 rounded-xl h-8"
+                      className="text-xs font-bold text-slate-700 border-slate-200 hover:bg-slate-50 rounded-xl h-8 cursor-pointer"
                       onClick={() => openAddPaper(activeExam.name, sec.isFree, sec.isFree ? 0 : activeExam.price, sec.categoryTag)}
                     >
                       <Plus className="w-3.5 h-3.5 mr-1" /> + Add Paper
@@ -1042,6 +1259,27 @@ export function ExamEditorPanel() {
               </Card>
             );
           })}
+
+          {examSections.length === 1 && (
+            <div className="p-8 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center text-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <Layers className="w-6 h-6" />
+              </div>
+              <div>
+                <h5 className="font-bold text-slate-800 text-sm">No Custom Subject Sections Added Yet</h5>
+                <p className="text-xs text-muted-foreground mt-0.5 max-w-md">
+                  Organize your mock tests for {activeExam.name} into custom subject sections (e.g. Core Subject Mocks, General Studies, Topic-Wise Tests).
+                </p>
+              </div>
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl px-4 py-2 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                onClick={() => openAddSubject(activeExam.name)}
+              >
+                <Plus className="w-4 h-4" /> + Add Section
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Common Dialogs */}
@@ -1378,25 +1616,25 @@ export function ExamEditorPanel() {
           </DialogContent>
         </Dialog>
 
-        {/* CREATE / EDIT SUBJECT MODAL */}
+        {/* CREATE / EDIT SECTION MODAL */}
         <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
               <DialogTitle className="font-bold text-lg text-slate-900">
-                {editingSubject?.id ? 'Edit Subject Section' : 'Add New Subject'}
+                {editingSubject?.id ? 'Edit Section' : 'Add New Section'}
               </DialogTitle>
               <DialogDescription>
-                Create a subject category card (e.g. Free Papers, Important Papers, General Knowledge, Horticulture Discipline) under this exam portal.
+                Create or customize a mock test section (e.g. Important Papers, BSc Agri Special, General Studies, Horticulture Discipline) under this exam portal.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSaveSubject} className="space-y-4 pt-2">
               <div className="space-y-1">
-                <Label className="text-xs font-bold">Subject Title</Label>
+                <Label className="text-xs font-bold">Section Title</Label>
                 <Input 
                   value={subjectForm.name} 
                   onChange={e => setSubjectForm(p => ({ ...p, name: e.target.value }))} 
                   required 
-                  placeholder="e.g. Horticulture Discipline – Paper II, General Studies" 
+                  placeholder="e.g. Important Papers, General Studies, Topic Tests" 
                 />
               </div>
               <div className="space-y-1">
@@ -1404,7 +1642,7 @@ export function ExamEditorPanel() {
                 <Textarea 
                   value={subjectForm.subtitle} 
                   onChange={e => setSubjectForm(p => ({ ...p, subtitle: e.target.value }))} 
-                  placeholder="e.g. 100 marks full-syllabus discipline mock test series" 
+                  placeholder="e.g. Comprehensive high-priority question sets for General Knowledge and BSc Agri" 
                   className="min-h-[70px] text-xs" 
                 />
               </div>
@@ -1414,7 +1652,7 @@ export function ExamEditorPanel() {
                   <Input 
                     value={subjectForm.badge} 
                     onChange={e => setSubjectForm(p => ({ ...p, badge: e.target.value }))} 
-                    placeholder="e.g. Core Subject Mocks, High Yield" 
+                    placeholder="e.g. High Yield Series, Core Mocks" 
                   />
                 </div>
                 <div className="space-y-1">
@@ -1425,14 +1663,14 @@ export function ExamEditorPanel() {
                   >
                     <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="paid" className="text-xs font-bold text-amber-700">Paid Subject</SelectItem>
-                      <SelectItem value="free" className="text-xs font-bold text-emerald-700">Free Subject</SelectItem>
+                      <SelectItem value="paid" className="text-xs font-bold text-amber-700">Paid Section</SelectItem>
+                      <SelectItem value="free" className="text-xs font-bold text-emerald-700">Free Section</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
               <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl">
-                {editingSubject?.id ? 'Save Subject Changes' : 'Create Subject Card'}
+                {editingSubject?.id ? 'Save Section Changes' : 'Create Section'}
               </Button>
             </form>
           </DialogContent>
@@ -1579,10 +1817,16 @@ export function ExamEditorPanel() {
             <DialogHeader>
               <DialogTitle className="font-bold text-lg text-slate-900 flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-indigo-600" />
-                Link Papers into {linkTargetExam}
+                {linkTargetSectionTitle 
+                  ? `Link Papers into "${linkTargetSectionTitle}" (${linkTargetExam})` 
+                  : `Link Papers into ${linkTargetExam}`
+                }
               </DialogTitle>
               <DialogDescription>
-                Select papers from other exams (e.g. AO/AAO General Knowledge or Important sets) to also make them available inside {linkTargetExam}.
+                {linkTargetSectionTitle
+                  ? `Select papers from other subjects or exams to link specifically into the "${linkTargetSectionTitle}" section of ${linkTargetExam}.`
+                  : `Select papers from other exams to make them available inside ${linkTargetExam}.`
+                }
               </DialogDescription>
             </DialogHeader>
 
@@ -1676,7 +1920,7 @@ export function ExamEditorPanel() {
                         </span>
                       ) : isSelected ? (
                         <span className="text-[10px] text-indigo-700 bg-indigo-100 font-bold px-2 py-0.5 rounded shrink-0">
-                          Linked to {linkTargetExam}
+                          Linked to {linkTargetSectionTitle ? `"${linkTargetSectionTitle}"` : linkTargetExam}
                         </span>
                       ) : null}
                     </div>
@@ -1687,7 +1931,7 @@ export function ExamEditorPanel() {
             {/* Footer */}
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
               <span className="text-xs text-slate-500 font-medium">
-                {selectedTestIdsToLink.length} papers selected for {linkTargetExam}
+                {selectedTestIdsToLink.length} papers selected for {linkTargetSectionTitle ? `"${linkTargetSectionTitle}"` : linkTargetExam}
               </span>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setLinkPapersDialogOpen(false)} className="rounded-xl text-xs">
@@ -1705,13 +1949,13 @@ export function ExamEditorPanel() {
           </DialogContent>
         </Dialog>
 
-        {/* DELETE SUBJECT CONFIRM */}
+        {/* DELETE SECTION CONFIRM */}
         <AlertDialog open={!!confirmDeleteSubject} onOpenChange={o => !o && setConfirmDeleteSubject(null)}>
           <AlertDialogContent className="rounded-2xl">
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Subject "{confirmDeleteSubject?.name}"?</AlertDialogTitle>
+              <AlertDialogTitle>Delete Section "{confirmDeleteSubject?.name}"?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete this subject section. Any papers assigned to it will remain in the exam and can be reassigned.
+                This will delete this section card. Any papers previously inside this section will remain in the exam portal and can be linked or reassigned.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1720,11 +1964,16 @@ export function ExamEditorPanel() {
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl"
                 onClick={() => {
                   if (confirmDeleteSubject) {
-                    handleDeleteSubject(confirmDeleteSubject.id, confirmDeleteSubject.name);
+                    handleDeleteSubject(
+                      confirmDeleteSubject.id, 
+                      confirmDeleteSubject.name, 
+                      confirmDeleteSubject.categoryTag,
+                      confirmDeleteSubject.sectionTestId
+                    );
                   }
                 }}
               >
-                Delete Subject
+                Delete Section
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

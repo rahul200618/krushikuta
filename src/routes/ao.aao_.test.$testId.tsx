@@ -58,6 +58,7 @@ function ActiveTestPage() {
 
         const isPaperFree = (test: any) => {
           if (!test) return false;
+          if (test.is_free === true) return true;
           const title = (test.title || '').toLowerCase().trim();
           const cat = (test.category || '').toLowerCase().trim();
           if (
@@ -93,17 +94,106 @@ function ActiveTestPage() {
             }
           }
 
-          const matchingCustomCat = currentTest.category?.trim();
-          const placeholderTest = allTests.find(
-            (t: any) => t.title === '_SUBJECT_PLACEHOLDER_' && t.category?.toLowerCase().trim() === matchingCustomCat?.toLowerCase()
-          );
+          const AO_AAO_INTERNAL_CATEGORIES = [
+            'ao/aao',
+            'ao / aao',
+            'important papers',
+            'bsc agri(85%)-paper ii',
+            'bsc agri',
+            'general knowledge-paper i',
+            'general paper',
+            'core papers',
+            'general',
+            'practical exam'
+          ];
+
+          const normalizeExamName = (str?: string) => {
+            if (!str) return '';
+            return str.toLowerCase().replace(/[\s\-_/\\|]+/g, '').trim();
+          };
+
+          const isAoAaoPaper = (c?: string) => {
+            if (!c) return true;
+            const catLower = c.toLowerCase().trim();
+            return AO_AAO_INTERNAL_CATEGORIES.some(a => catLower.includes(a)) || normalizeExamName(catLower) === 'aoaao';
+          };
+
+          const getLinkedExams = (t: any) => {
+            if (!t) return [];
+            try {
+              if (t.popup_message && typeof t.popup_message === 'string' && t.popup_message.startsWith('{')) {
+                const parsed = JSON.parse(t.popup_message);
+                if (Array.isArray(parsed.linked_exams)) {
+                  return parsed.linked_exams;
+                }
+              }
+            } catch (e) {}
+            return [];
+          };
+
+          const isPaperInExam = (t: any, targetExamId: string, targetExamShortTitle: string) => {
+            const linked = getLinkedExams(t);
+            const normId = normalizeExamName(targetExamId);
+            const normShort = normalizeExamName(targetExamShortTitle);
+
+            const isExplicitlyLinked = linked.some((l: string) => {
+              const normL = normalizeExamName(l);
+              if (!normL) return false;
+              return (
+                normL === normId ||
+                normL === normShort ||
+                normL.startsWith(normId) ||
+                normL.startsWith(normShort) ||
+                (normShort.length > 0 && normL.includes(normShort))
+              );
+            });
+
+            if (isExplicitlyLinked) return true;
+
+            const rawCat = (t.category || '').trim();
+            const normCat = normalizeExamName(rawCat);
+
+            if (normId === 'aoaao') {
+              if (isAoAaoPaper(rawCat)) return true;
+              return false;
+            }
+
+            if (normCat === normId || normCat === normShort) return true;
+            if (normShort.length > 0 && normCat.includes(normShort)) return true;
+
+            return false;
+          };
+
+          const placeholderTests = allTests.filter((t: any) => t.title === '_SUBJECT_PLACEHOLDER_');
+
+          let hasExamAccess = false;
+          if (accessList.includes(-101) && isPaperInExam(currentTest, 'AO / AAO', 'AO / AAO')) {
+            hasExamAccess = true;
+          }
+          if (accessList.includes(-102) && (isPaperInExam(currentTest, 'AHO / ADH', 'AHO / ADH') || isPaperInExam(currentTest, 'AHO/ADH', 'AHO/ADH') || (currentTest.category && currentTest.category.toLowerCase().includes('aho')))) {
+            hasExamAccess = true;
+          }
+
+          for (const pRow of placeholderTests) {
+            if (accessList.includes(pRow.id)) {
+              const examName = pRow.category?.trim();
+              if (examName) {
+                if (isPaperInExam(currentTest, examName, examName)) {
+                  hasExamAccess = true;
+                  break;
+                }
+                if (normalizeExamName(examName).includes('aho') && (isPaperInExam(currentTest, 'AHO/ADH', 'AHO/ADH') || isPaperInExam(currentTest, 'AHO / ADH', 'AHO / ADH'))) {
+                  hasExamAccess = true;
+                  break;
+                }
+              }
+            }
+          }
 
           const hasAccess =
             accessList.includes(-1) ||
-            accessList.includes(-101) ||
             accessList.includes(targetTestId) ||
-            (placeholderTest && accessList.includes(placeholderTest.id)) ||
-            (matchingCustomCat?.toLowerCase().includes('aho') && accessList.includes(-102));
+            hasExamAccess;
 
           if (!hasAccess) {
             toast.error("Access Denied: Please unlock or purchase this test series to attend.");

@@ -175,6 +175,11 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
     'practical exam'
   ];
 
+  const normalizeExamName = (str?: string) => {
+    if (!str) return '';
+    return str.toLowerCase().replace(/[\s\-_/\\|]+/g, '').trim();
+  };
+
   const isAoAaoPaper = (cat?: string) => {
     if (!cat) return true;
     const clean = cat.toLowerCase().trim();
@@ -184,9 +189,16 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
   const getLinkedExams = (test: MockTest): string[] => {
     let linked: string[] = [];
     try {
-      if ((test as any).popup_message && (test as any).popup_message.startsWith('{')) {
-        const parsed = JSON.parse((test as any).popup_message);
-        if (Array.isArray(parsed.linked_exams)) {
+      const raw = (test as any).popup_message;
+      if (raw) {
+        let parsed = raw;
+        if (typeof raw === 'string') {
+          const trimmed = raw.trim();
+          if (trimmed.startsWith('{')) {
+            parsed = JSON.parse(trimmed);
+          }
+        }
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.linked_exams)) {
           linked = parsed.linked_exams;
         }
       }
@@ -196,22 +208,41 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
 
   const isPaperInExam = (test: MockTest, examId: string, examName: string): boolean => {
     const linked = getLinkedExams(test);
-    const cleanExamId = examId.toLowerCase().trim();
-    const cleanExamName = examName.toLowerCase().trim();
+    const normExamId = normalizeExamName(examId);
+    const normExamName = normalizeExamName(examName);
+    const isTargetAo = normExamId === 'aoaao' || (normExamId.startsWith('ao') && !normExamId.includes('aho'));
 
+    // 1. Check multi-exam linked tags
     if (linked.some(l => {
-      const cleanL = l.toLowerCase().trim();
-      return cleanL === cleanExamId || cleanL === cleanExamName || (cleanExamId.includes('ao') && cleanL.includes('ao'));
+      const normL = normalizeExamName(l);
+      if (!normL) return false;
+      return (
+        normL === normExamId ||
+        normL === normExamName ||
+        normExamId.includes(normL) ||
+        normL.includes(normExamId) ||
+        (isTargetAo && (normL === 'aoaao' || (normL.startsWith('ao') && !normL.includes('aho'))))
+      );
     })) {
       return true;
     }
 
-    const cat = (test.category || '').toLowerCase().trim();
-    if (cleanExamId.includes('ao') && (isAoAaoPaper(cat) || cat === 'ao/aao' || cat === 'ao / aao')) {
+    // 2. Check native category
+    const rawCat = (test.category || '').trim();
+    const normCat = normalizeExamName(rawCat);
+
+    if (isTargetAo && (isAoAaoPaper(rawCat) || normCat === 'aoaao' || (normCat.startsWith('ao') && !normCat.includes('aho')))) {
       return true;
     }
 
-    if (cat === cleanExamId || cat === cleanExamName || cat.startsWith(`${cleanExamName}::`) || cat.startsWith(`${cleanExamId}::`)) {
+    if (
+      normCat === normExamId ||
+      normCat === normExamName ||
+      normCat.startsWith(normExamId) ||
+      normCat.startsWith(normExamName) ||
+      rawCat.toLowerCase().startsWith(`${examName.toLowerCase()}::`) ||
+      rawCat.toLowerCase().startsWith(`${examId.toLowerCase()}::`)
+    ) {
       return true;
     }
 
@@ -250,17 +281,19 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
           freeCount: 0,
           paidCount: 0,
           placeholderTestId: test.id,
-          isUnlocked: accessList.includes(-1) || accessList.includes(test.id) || (cat.toLowerCase().includes('aho') && accessList.includes(-102))
+          isUnlocked: accessList.includes(-1) || accessList.includes(test.id) || (normalizeExamName(cat).includes('aho') && accessList.includes(-102))
         };
       }
     }
   });
 
   const isPaperFree = (test: MockTest) => {
+    if (!test) return false;
+    if (test.is_free === true) return true;
     const title = (test.title || '').toLowerCase().trim();
     const cat = (test.category || '').toLowerCase().trim();
 
-    // Strictly the 2 official free practice papers:
+    // Strictly the 2 official free practice papers or tests explicitly marked is_free:
     if (
       title.includes('paper -i (general knowledge)') ||
       title.includes('paper-ii (bsc agri graduates)') ||
@@ -283,7 +316,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
       if (isPaperInExam(test, targetExam.id, targetExam.shortTitle)) {
         if (!targetExam.papers.some(p => p.id === test.id)) {
           targetExam.papers.push(test);
-          if (isPaperFree(test) || test.is_free || test.price === 0) {
+          if (isPaperFree(test)) {
             targetExam.freeCount++;
           } else {
             targetExam.paidCount++;
@@ -294,7 +327,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
   });
 
   const hasTestAccess = (test: MockTest) => {
-    if (isPaperFree(test) || test.is_free || test.price === 0) return true;
+    if (isPaperFree(test)) return true;
     if (accessList.includes(-1)) return true;
     if (accessList.includes(test.id)) return true;
 
@@ -320,7 +353,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
   };
 
   const getTestStatus = (test: MockTest): 'free' | 'unlocked' | 'paid' => {
-    if (isPaperFree(test) || test.is_free || test.price === 0) return 'free';
+    if (isPaperFree(test)) return 'free';
     if (hasTestAccess(test)) return 'unlocked';
     return 'paid';
   };
@@ -344,13 +377,74 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
     papers: MockTest[];
   }
 
+  const isPaperInExamSection = (test: MockTest, examName: string, sectionTitle: string, sectionTag?: string): boolean => {
+    const linked = getLinkedExams(test);
+    const normExamName = normalizeExamName(examName);
+    const normSectionTitle = normalizeExamName(sectionTitle);
+    const normTag = sectionTag ? normalizeExamName(sectionTag) : '';
+    const normExamSection = normalizeExamName(`${examName}::${sectionTitle}`);
+
+    // 1. Is it linked explicitly to this section?
+    const hasSectionLink = linked.some(l => {
+      const normL = normalizeExamName(l);
+      if (!normL) return false;
+      return (
+        normL === normExamSection ||
+        (normTag && normL === normTag) ||
+        normL === `${normExamName}${normSectionTitle}` ||
+        (normL.includes(normExamName) && normL.includes(normSectionTitle))
+      );
+    });
+
+    if (hasSectionLink) return true;
+
+    // 2. Is it in this exam with matching native category?
+    const rawCat = (test.category || '').trim();
+    const normCat = normalizeExamName(rawCat);
+
+    if (
+      normCat === normExamSection ||
+      (normTag && normCat === normTag) ||
+      normCat === `${normExamName}${normSectionTitle}`
+    ) {
+      return true;
+    }
+
+    // 3. Free Practice Papers section
+    if (normSectionTitle.includes('freepractice') || normSectionTitle === 'free') {
+      if (isPaperFree(test) && isPaperInExam(test, examName, examName)) {
+        return true;
+      }
+    }
+
+    // 4. Inferred matching if explicitly named AND is native to this exam
+    const hasOtherSectionLinkInThisExam = linked.some(l => {
+      const normL = normalizeExamName(l);
+      return normL.includes(normExamName) && normL.length > normExamName.length;
+    });
+
+    if (
+      !hasOtherSectionLinkInThisExam &&
+      isPaperInExam(test, examName, examName) && 
+      (normCat === normSectionTitle || (normCat.length > 0 && normCat.includes(normSectionTitle)))
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
   const getExamSubjectSections = (exam: DynamicExam, filteredPapers: MockTest[]): SubjectSection[] => {
     const isAoAao = exam.id === 'AO / AAO' || exam.id === 'AO/AAO';
     const sortFn = (a: MockTest, b: MockTest) => a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' });
 
     // Find custom subject section rows created for this exam (_SUBJECT_SECTION_)
     const customSubjectRows = tests.filter(
-      t => t.title === '_SUBJECT_SECTION_' && t.category?.toLowerCase().trim() === exam.shortTitle.toLowerCase().trim()
+      t => t.title === '_SUBJECT_SECTION_' && 
+      (t.category?.toLowerCase().trim() === exam.shortTitle.toLowerCase().trim() || 
+       normalizeExamName(t.category) === normalizeExamName(exam.shortTitle) ||
+       normalizeExamName(t.category) === normalizeExamName(exam.name) ||
+       normalizeExamName(t.category) === normalizeExamName(exam.id))
     );
 
     const customSections: SubjectSection[] = customSubjectRows.map(row => {
@@ -372,40 +466,57 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
       };
     });
 
-    if (isAoAao) {
-      const freePapers = filteredPapers.filter(t => isPaperFree(t));
-      const paidPapers = filteredPapers.filter(t => !isPaperFree(t));
+    const freeSection: SubjectSection = {
+      id: 'free',
+      title: 'Free Practice Papers',
+      badge: 'Free Access',
+      isFree: true,
+      description: 'Available immediately to all registered students without subscription',
+      papers: filteredPapers.filter(t => isPaperFree(t)).sort(sortFn)
+    };
 
-      // Check if any paid papers match custom sections
+    const paidPapers = filteredPapers.filter(t => !isPaperFree(t));
+
+    // If custom sections have been created for this exam by admin:
+    if (customSections.length > 0) {
       const remainingPaid: MockTest[] = [];
       paidPapers.forEach(p => {
-        const matchedCustom = customSections.find(
-          s => p.category?.toLowerCase().trim() === s.title.toLowerCase().trim() ||
-               p.category?.toLowerCase().trim() === `${exam.shortTitle}::${s.title}`.toLowerCase().trim()
-        );
-        if (matchedCustom) {
-          matchedCustom.papers.push(p);
-        } else {
+        let matched = false;
+        customSections.forEach(s => {
+          if (isPaperInExamSection(p, exam.shortTitle, s.title, `${exam.shortTitle}::${s.title}`)) {
+            s.papers.push(p);
+            matched = true;
+          }
+        });
+        if (!matched) {
           remainingPaid.push(p);
         }
       });
 
-      const importantPapers = remainingPaid.filter(t => t.category?.toLowerCase().includes('important'));
-      const bscAgriPapers = remainingPaid.filter(t => !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii') || t.title.toLowerCase().includes('bsc agri')));
-      const gkPapers = remainingPaid.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk') || t.title.toLowerCase().includes('general knowledge') || t.title.toLowerCase().includes('gk')));
-      const otherPapers = remainingPaid.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
-
       customSections.forEach(s => s.papers.sort(sortFn));
 
       return [
-        {
-          id: 'free',
-          title: 'Free Practice Papers',
-          badge: 'Free Access',
-          isFree: true,
-          description: 'Available immediately to all registered students without subscription',
-          papers: freePapers.sort(sortFn)
-        },
+        freeSection,
+        ...customSections,
+        ...(remainingPaid.length > 0 ? [{
+          id: 'other',
+          title: 'Additional Mock Papers',
+          badge: 'Additional Sets',
+          isFree: false,
+          description: `Other mock papers and practice tests under ${exam.shortTitle}`,
+          papers: remainingPaid.sort(sortFn)
+        }] : [])
+      ];
+    }
+
+    if (isAoAao) {
+      const importantPapers = paidPapers.filter(t => t.category?.toLowerCase().includes('important'));
+      const bscAgriPapers = paidPapers.filter(t => !importantPapers.includes(t) && (t.category?.toLowerCase().includes('bsc agri') || t.category?.toLowerCase().includes('paper ii') || t.title.toLowerCase().includes('bsc agri')));
+      const gkPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && (t.category?.toLowerCase().includes('general knowledge') || t.category?.toLowerCase().includes('paper i') || t.category?.toLowerCase().includes('gk') || t.title.toLowerCase().includes('general knowledge') || t.title.toLowerCase().includes('gk')));
+      const otherPapers = paidPapers.filter(t => !importantPapers.includes(t) && !bscAgriPapers.includes(t) && !gkPapers.includes(t));
+
+      return [
+        freeSection,
         {
           id: 'important',
           title: 'Important Papers',
@@ -430,7 +541,6 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
           description: 'Karnataka state general studies, current affairs, and mental ability series',
           papers: gkPapers.sort(sortFn)
         },
-        ...customSections,
         ...(otherPapers.length > 0 ? [{
           id: 'other',
           title: 'Additional Mock Papers',
@@ -441,59 +551,9 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
         }] : [])
       ];
     } else {
-      // Dynamic Exams (e.g. AHO / ADH, etc.)
-      const freeSection: SubjectSection = {
-        id: 'free',
-        title: 'Free Practice Papers',
-        badge: 'Free Access',
-        isFree: true,
-        description: 'Available immediately to all registered students without subscription',
-        papers: []
-      };
-
-      if (customSections.length > 0) {
-        filteredPapers.forEach(paper => {
-          if (isPaperFree(paper) || paper.is_free || paper.price === 0) {
-            freeSection.papers.push(paper);
-            return;
-          }
-          const pTitle = paper.title.toLowerCase();
-          const pCat = (paper.category || '').toLowerCase();
-
-          const matchedCustom = customSections.find(
-            s => pCat === s.title.toLowerCase().trim() ||
-                 pCat === s.title.toLowerCase().trim() ||
-                 pCat.includes(s.title.toLowerCase()) ||
-                 pTitle.includes(s.title.toLowerCase()) ||
-                 (s.title.toLowerCase().includes('general knowledge') && (pTitle.includes('general knowledge') || pTitle.includes('gk') || pCat.includes('general knowledge') || pCat.includes('gk'))) ||
-                 (s.title.toLowerCase().includes('important') && (pTitle.includes('important') || pCat.includes('important'))) ||
-                 (s.title.toLowerCase().includes('paper i') && (pTitle.includes('paper i') || pCat.includes('paper i'))) ||
-                 (s.title.toLowerCase().includes('paper ii') && (pTitle.includes('paper ii') || pCat.includes('paper ii')))
-          );
-          if (matchedCustom) {
-            matchedCustom.papers.push(paper);
-          } else {
-            customSections[0].papers.push(paper);
-          }
-        });
-
-        freeSection.papers.sort(sortFn);
-        customSections.forEach(s => s.papers.sort(sortFn));
-
-        return [freeSection, ...customSections];
-      } else {
-        const freePapers = filteredPapers.filter(t => isPaperFree(t) || t.is_free || t.price === 0);
-        const paidPapers = filteredPapers.filter(t => !isPaperFree(t) && !t.is_free && t.price > 0);
-
+      if (paidPapers.length > 0) {
         return [
-          {
-            id: 'free',
-            title: 'Free Practice Papers',
-            badge: 'Free Access',
-            isFree: true,
-            description: 'Available immediately to all registered students without subscription',
-            papers: freePapers.sort(sortFn)
-          },
+          freeSection,
           {
             id: 'paid',
             title: 'Subscription / Paid Papers',
@@ -504,12 +564,18 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
           }
         ];
       }
+      return [freeSection];
     }
   };
 
   // ── VIEW: INSIDE A SPECIFIC EXAM ─────────────────────────
   if (selectedSubject) {
-    const currentExam = dynamicExamsList.find(d => d.id === selectedSubject) || dynamicExamsList[0];
+    const currentExam = dynamicExamsList.find(d => 
+      d.id === selectedSubject || 
+      normalizeExamName(d.id) === normalizeExamName(selectedSubject) ||
+      normalizeExamName(d.shortTitle) === normalizeExamName(selectedSubject) ||
+      normalizeExamName(d.name) === normalizeExamName(selectedSubject)
+    ) || dynamicExamsList[0];
     let examPapers = currentExam.papers;
 
     if (paperFilterTab === 'free') {
@@ -532,18 +598,47 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
       return (
         <div 
           key={test.id} 
-          className="p-3 sm:p-3.5 bg-slate-50/80 dark:bg-slate-900/60 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 border border-slate-200/80 dark:border-slate-800 rounded-xl sm:rounded-2xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+          className={`p-3 sm:p-3.5 rounded-xl sm:rounded-2xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 group border ${
+            status === 'paid'
+              ? 'bg-slate-50/60 dark:bg-slate-900/40 border-slate-200/70 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700'
+              : 'bg-white dark:bg-slate-900/60 border-slate-200/80 dark:border-slate-800 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 hover:border-emerald-500/30'
+          }`}
         >
           {/* Left Details */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 font-bold text-xs group-hover:border-emerald-500 group-hover:text-emerald-600 transition-colors shadow-2xs">
-              <FileText className="w-4 h-4" />
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs transition-colors shadow-2xs ${
+              status === 'paid'
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 border border-slate-200 dark:border-slate-700'
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 group-hover:border-emerald-500 group-hover:text-emerald-600'
+            }`}>
+              {status === 'paid' ? <Lock className="w-4 h-4 text-slate-400" /> : <FileText className="w-4 h-4" />}
             </div>
 
             <div className="min-w-0 flex-1">
-              <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors leading-snug">
-                {test.title}
-              </h4>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className={`font-extrabold text-sm sm:text-base transition-colors leading-snug ${
+                  status === 'paid' 
+                    ? 'text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white' 
+                    : 'text-slate-900 dark:text-white group-hover:text-emerald-600'
+                }`}>
+                  {test.title}
+                </h4>
+                {status === 'free' && (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                    Free
+                  </span>
+                )}
+                {status === 'unlocked' && (
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 dark:bg-blue-950/60 dark:text-blue-300 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                    <Unlock className="w-2.5 h-2.5 text-blue-600" /> Unlocked
+                  </span>
+                )}
+                {status === 'paid' && (
+                  <span className="text-[10px] font-bold text-slate-600 bg-slate-100 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" /> Locked
+                  </span>
+                )}
+              </div>
 
               {test.description && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
@@ -571,7 +666,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
                   if (!userId) onRequireAuth?.();
                   else navigate({ to: '/ao/aao/premium', search: { show_pricing: true } as any });
                 }}
-                className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl h-9 px-4 cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5" 
+                className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl h-9 px-4 cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 shadow-xs transition-transform active:scale-95" 
                 size="sm"
               >
                 <Lock className="w-3.5 h-3.5" />
@@ -579,7 +674,7 @@ export function ExamDashboard({ userId, userEmail, userProfile, onRequireAuth, d
               </Button>
             ) : (
               <Button 
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs h-9 px-4 cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5" 
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs h-9 px-4 cursor-pointer w-full sm:w-auto flex items-center justify-center gap-1.5 transition-transform active:scale-95" 
                 size="sm"
                 onClick={() => {
                   if (!userId) onRequireAuth?.();

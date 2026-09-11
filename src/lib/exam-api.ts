@@ -31,7 +31,10 @@ export const submitTest = (submissionId: number, testId: number, answers: Record
 
 export const getUserPerformance = (userId: string) => examApi('get-user-performance', { userId });
 
-export const saveMockTest = (test: Record<string, unknown>) => examApi('save-mock-test', { test });
+export const saveMockTest = (test: Record<string, unknown>) => {
+  const { total_questions, mock_questions, ...cleanTest } = test as any;
+  return examApi('save-mock-test', { test: cleanTest });
+};
 export const deleteMockTest = (testId: number) => examApi('delete-mock-test', { testId });
 
 export const saveMockQuestion = (question: Record<string, unknown>) => examApi('save-mock-question', { question });

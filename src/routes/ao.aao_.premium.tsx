@@ -220,21 +220,14 @@ function PremiumSchedulePage() {
   });
 
   const renderSubjectDetailView = (subjectName: string) => {
-    const subject = paidSubjects.find(s => s.category === subjectName);
+    const cleanSub = (subjectName || '').toLowerCase().replace(/[\s\-_/]/g, '');
+    const subject = paidSubjects.find(s => {
+      const cleanCat = (s.category || '').toLowerCase().replace(/[\s\-_/]/g, '');
+      return cleanCat === cleanSub || cleanCat.includes(cleanSub) || cleanSub.includes(cleanCat);
+    });
+
     if (!subject) {
-      return (
-        <Card className="p-8 text-center bg-white border border-slate-200 rounded-2xl">
-          <p className="text-slate-500 font-medium text-sm">Subject not found.</p>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => navigate({ to: '/ao/aao/premium', search: { show_pricing } as any })}
-            className="mt-4 rounded-full"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to All Subjects
-          </Button>
-        </Card>
-      );
+      return null;
     }
 
     const isUnlocked = isSubjectUnlocked(subject.category);
@@ -380,7 +373,7 @@ function PremiumSchedulePage() {
           <div className="flex justify-center items-center py-24 bg-white rounded-2xl border">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
           </div>
-        ) : selectedSubjectName ? (
+        ) : selectedSubjectName && renderSubjectDetailView(selectedSubjectName) ? (
           <div className="animate-in fade-in duration-300">
             {renderSubjectDetailView(selectedSubjectName)}
           </div>

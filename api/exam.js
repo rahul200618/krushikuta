@@ -22,6 +22,78 @@ const supabase = createClient(
   serviceKey || anonKey
 );
 
+function normalizeExamName(str) {
+  if (!str) return '';
+  return str.toLowerCase().replace(/[\s\-_/\\|]+/g, '').trim();
+}
+
+const AO_AAO_INTERNAL_CATEGORIES = [
+  'ao/aao',
+  'ao / aao',
+  'important papers',
+  'bsc agri(85%)-paper ii',
+  'bsc agri',
+  'general knowledge-paper i',
+  'general paper',
+  'core papers',
+  'general',
+  'practical exam'
+];
+
+function isAoAaoPaper(cat) {
+  if (!cat) return true;
+  const c = cat.toLowerCase().trim();
+  return AO_AAO_INTERNAL_CATEGORIES.some(a => c.includes(a)) || normalizeExamName(c) === 'aoaao';
+}
+
+function getLinkedExams(test) {
+  if (!test) return [];
+  try {
+    if (test.popup_message && typeof test.popup_message === 'string' && test.popup_message.startsWith('{')) {
+      const parsed = JSON.parse(test.popup_message);
+      if (Array.isArray(parsed.linked_exams)) {
+        return parsed.linked_exams;
+      }
+    }
+  } catch (e) {}
+  return [];
+}
+
+function isPaperInExam(test, targetExamId, targetExamShortTitle) {
+  const linked = getLinkedExams(test);
+  const normId = normalizeExamName(targetExamId);
+  const normShort = normalizeExamName(targetExamShortTitle);
+
+  // 1. Explicitly linked
+  const isExplicitlyLinked = linked.some(l => {
+    const normL = normalizeExamName(l);
+    if (!normL) return false;
+    return (
+      normL === normId ||
+      normL === normShort ||
+      normL.startsWith(normId) ||
+      normL.startsWith(normShort) ||
+      (normShort.length > 0 && normL.includes(normShort))
+    );
+  });
+
+  if (isExplicitlyLinked) return true;
+
+  // 2. Native category
+  const rawCat = (test.category || '').trim();
+  const normCat = normalizeExamName(rawCat);
+
+  if (normId === 'aoaao') {
+    if (isAoAaoPaper(rawCat)) return true;
+    return false;
+  }
+
+  if (normCat === normId || normCat === normShort) return true;
+  if (normShort.length > 0 && normCat.includes(normShort)) return true;
+
+  return false;
+}
+
 function isPlaceholderConfig() {
   return !supabaseUrl || supabaseUrl.includes('placeholder-project') || supabaseUrl.includes('placeholder');
 }
@@ -452,24 +524,47 @@ export default async function handler(req, res) {
 
             const accessList = (purchaseRows || []).map(r => r.mock_test_id);
 
-            // Check if there's a placeholder ID for custom exam
-            let customPlaceholderId = null;
-            if (testData.category) {
-              const { data: placeholderRow } = await supabase
-                .from('mock_tests')
-                .select('id')
-                .eq('title', '_SUBJECT_PLACEHOLDER_')
-                .ilike('category', testData.category.trim())
-                .maybeSingle();
-              if (placeholderRow) customPlaceholderId = placeholderRow.id;
+            // Fetch placeholder rows and subject sections to check exam package access
+            const { data: placeholderRows } = await supabase
+              .from('mock_tests')
+              .select('id, title, category, description')
+              .in('title', ['_SUBJECT_PLACEHOLDER_', '_SUBJECT_SECTION_']);
+
+            let hasExamAccess = false;
+
+            // Check if test belongs to AO/AAO bundle (-101)
+            if (accessList.includes(-101) && isPaperInExam(testData, 'AO / AAO', 'AO / AAO')) {
+              hasExamAccess = true;
+            }
+
+            // Check if test belongs to AHO/ADH bundle (-102)
+            if (accessList.includes(-102) && (isPaperInExam(testData, 'AHO / ADH', 'AHO / ADH') || isPaperInExam(testData, 'AHO/ADH', 'AHO/ADH') || (testData.category && testData.category.toLowerCase().includes('aho')))) {
+              hasExamAccess = true;
+            }
+
+            // Check against all custom exam placeholders (_SUBJECT_PLACEHOLDER_)
+            if (placeholderRows && placeholderRows.length > 0) {
+              for (const pRow of placeholderRows) {
+                if (accessList.includes(pRow.id)) {
+                  const examName = pRow.category?.trim();
+                  if (examName) {
+                    if (isPaperInExam(testData, examName, examName)) {
+                      hasExamAccess = true;
+                      break;
+                    }
+                    if (normalizeExamName(examName).includes('aho') && (isPaperInExam(testData, 'AHO/ADH', 'AHO/ADH') || isPaperInExam(testData, 'AHO / ADH', 'AHO / ADH'))) {
+                      hasExamAccess = true;
+                      break;
+                    }
+                  }
+                }
+              }
             }
 
             const hasAccess =
               accessList.includes(-1) ||
-              accessList.includes(-101) ||
               accessList.includes(Number(testId)) ||
-              (customPlaceholderId && accessList.includes(customPlaceholderId)) ||
-              (cat.includes('aho') && accessList.includes(-102));
+              hasExamAccess;
 
             if (!hasAccess) {
               return res.status(403).json({
@@ -595,7 +690,7 @@ export default async function handler(req, res) {
       // ── ADMIN: MOCK TESTS ────────────────────────────────────
       case 'save-mock-test': {
         const { test } = payload;
-        const { id, ...rest } = test;
+        const { id, total_questions, mock_questions, ...rest } = test || {};
         let data, error;
         if (id) {
           ({ data, error } = await supabase.from('mock_tests').update(rest).eq('id', id).select().single());
